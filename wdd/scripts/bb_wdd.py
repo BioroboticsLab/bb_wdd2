@@ -4,9 +4,10 @@ import sys
 import time
 import numpy as np
 
+#from multiprocessing_generator import ParallelGenerator
 from skimage.transform import resize
 
-from wdd.camera import OpenCVCapture, Flea3Capture
+from wdd.camera import OpenCVCapture, Flea3Capture, cam_generator
 from wdd.processing import FrequencyDetector, WaggleDetector
 from wdd.export import WaggleExporter
 
@@ -31,14 +32,12 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
     min_num_detections = min_num_detections * fps
     
     if capture_type == 'OpenCV':
-        cam = OpenCVCapture(width=width, height=height, fps=fps, device=video_device)
+        cam_obj = OpenCVCapture
     elif capture_type == 'PyCapture2':
-        cam = Flea3Capture(width=width, height=height, fps=fps, device=video_device)
+        cam_obj = Flea3Capture
     else:
         raise RuntimeError('capture_type must be either OpenCV or PyCapture2')
     
-    cam.warmup()
-
     # TODO Ben: respect original video size
     full_frame_buffer_roi_size = 50
     pad_size = full_frame_buffer_roi_size // 2
@@ -54,11 +53,12 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
 
     frame_idx = 0
     start_time = time.time()
-    while True:
+    #with cam_generator(OpenCVCapture, width=width, height=height, fps=fps, device=video_device) as gen:
+    for ret, frame, frame_orig, background in cam_generator(cam_obj, width=width, height=height, fps=fps, device=video_device):
         if frame_idx % 1000 == 0:
             start_time = time.time()
 
-        ret, frame, frame_orig = cam.get_frame()
+        #ret, frame, frame_orig = cam.get_frame()
         
         if not ret:
             print('Unable to retrieve frame from video device')
@@ -66,7 +66,7 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
 
         full_frame_buffer[frame_idx % full_frame_buffer_len, pad_size:-pad_size, pad_size:-pad_size] = frame_orig.copy()
 
-        r = dd.process(frame, cam.background)
+        r = dd.process(frame, background)
         if r is not None:
             activity, frame_diff = r
             wd.process(frame_idx, activity)

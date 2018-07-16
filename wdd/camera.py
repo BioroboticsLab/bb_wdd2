@@ -118,3 +118,13 @@ class Flea3Capture(Camera):
         ret, frame_orig = self.cap.read()
         return ret, frame_orig
 
+
+def cam_generator(cam_object, *args, **kwargs):
+    cam = cam_object(*args, **kwargs)
+    cam.warmup()
+
+    while True:
+        ret, frame, frame_orig = cam.get_frame()
+        if not ret:
+            break
+        yield ret, frame, frame_orig, cam.background
