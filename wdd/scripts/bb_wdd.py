@@ -4,7 +4,7 @@ import sys
 import time
 import numpy as np
 
-#from multiprocessing_generator import ParallelGenerator
+from multiprocessing_generator import ParallelGenerator
 from skimage.transform import resize
 
 from wdd.camera import OpenCVCapture, Flea3Capture, cam_generator
@@ -42,7 +42,7 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
     full_frame_buffer_roi_size = 50
     pad_size = full_frame_buffer_roi_size // 2
     full_frame_buffer_len = 100
-    full_frame_buffer = np.zeros((full_frame_buffer_len, 360 + 2 * pad_size, 682 + 2 * pad_size, 3), dtype=np.uint8)
+    full_frame_buffer = np.zeros((full_frame_buffer_len, 360 + 2 * pad_size, 683 + 2 * pad_size), dtype=np.uint8)
 
     dd = FrequencyDetector(height=height, width=width, fps=fps)
     exporter = WaggleExporter(cam_id=cam_identifier, output_path=output_path, full_frame_buffer=full_frame_buffer,
@@ -53,46 +53,46 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
 
     frame_idx = 0
     start_time = time.time()
-    #with cam_generator(OpenCVCapture, width=width, height=height, fps=fps, device=video_device) as gen:
-    for ret, frame, frame_orig, background in cam_generator(cam_obj, width=width, height=height, fps=fps, device=video_device):
-        if frame_idx % 1000 == 0:
-            start_time = time.time()
-
-        #ret, frame, frame_orig = cam.get_frame()
-        
-        if not ret:
-            print('Unable to retrieve frame from video device')
-            break
-
-        full_frame_buffer[frame_idx % full_frame_buffer_len, pad_size:-pad_size, pad_size:-pad_size] = frame_orig.copy()
-
-        r = dd.process(frame, background)
-        if r is not None:
-            activity, frame_diff = r
-            wd.process(frame_idx, activity)
-        
-        # TODO Ben: Make relative to video size
-        if debug and frame_idx % 101 == 0:
-            current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
-            current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.current_waggles]
-            for blob_index, ((y, x), nd) in enumerate(zip(current_waggle_positions, current_waggle_num_detections)):
-                cv2.circle(frame_orig, (int(x * 2), int(y * 2)), 10, (0, 0, 255), 2)
-                    
-            """
-            current_waggle_num_detections = [len(w.xs) for w in wd.finalized_waggles]
-            current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.finalized_waggles]
-            for blob_index, ((y, x), nd) in enumerate(zip(current_waggle_positions, current_waggle_num_detections)):
-                cv2.circle(frame_orig, (int(x * 2), int(y * 2)), 10, (255, 255, 255), 2)
-            """
-
-            cv2.imshow('Image', resize(frame_orig, (360 * 2, 682 * 2)))
-            cv2.waitKey(1)
-        
-        end_time = time.time()
-        processing_fps = ((frame_idx % 1000) + 1) / (end_time - start_time)
-        frame_idx = (frame_idx + 1)
-        
-        sys.stdout.write('\rCurrently processing with {:.1f} fps '.format(processing_fps))
+    with ParallelGenerator(cam_generator(cam_obj, width=width, height=height, fps=fps, device=video_device)) as gen:
+        for ret, frame, frame_orig, background in gen:
+            if frame_idx % 1000 == 0:
+                start_time = time.time()
+    
+            #ret, frame, frame_orig = cam.get_frame()
+            
+            if not ret:
+                print('Unable to retrieve frame from video device')
+                break
+    
+            full_frame_buffer[frame_idx % full_frame_buffer_len, pad_size:-pad_size, pad_size:-pad_size] = frame_orig.copy()
+    
+            r = dd.process(frame, background)
+            if r is not None:
+                activity, frame_diff = r
+                wd.process(frame_idx, activity)
+            
+            # TODO Ben: Make relative to video size
+            if debug and frame_idx % 101 == 0:
+                current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
+                current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.current_waggles]
+                for blob_index, ((y, x), nd) in enumerate(zip(current_waggle_positions, current_waggle_num_detections)):
+                    cv2.circle(frame_orig, (int(x * 2), int(y * 2)), 10, (0, 0, 255), 2)
+                        
+                """
+                current_waggle_num_detections = [len(w.xs) for w in wd.finalized_waggles]
+                current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.finalized_waggles]
+                for blob_index, ((y, x), nd) in enumerate(zip(current_waggle_positions, current_waggle_num_detections)):
+                    cv2.circle(frame_orig, (int(x * 2), int(y * 2)), 10, (255, 255, 255), 2)
+                """
+    
+                cv2.imshow('Image', resize(frame_orig, (360 * 2, 682 * 2)))
+                cv2.waitKey(1)
+            
+            end_time = time.time()
+            processing_fps = ((frame_idx % 1000) + 1) / (end_time - start_time)
+            frame_idx = (frame_idx + 1)
+            
+            sys.stdout.write('\rCurrently processing with {:.1f} fps '.format(processing_fps))
 
 
 if __name__ == '__main__':
