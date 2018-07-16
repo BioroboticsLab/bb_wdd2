@@ -30,7 +30,7 @@ class Camera:
             return ret, frame_orig, frame_orig
         
         frame = ((cv2.cvtColor(frame_orig, cv2.COLOR_BGR2GRAY) / 255) * 2) - 1
-        frame = resize(frame, (self.height, self.width), mode='constant', anti_aliasing=True)
+        frame = resize(frame, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
         
         if self.background is None:
             self.background = np.copy(frame)
