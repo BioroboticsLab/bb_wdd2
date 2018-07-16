@@ -39,7 +39,7 @@ class Camera:
             
         return ret, frame, frame_orig
     
-    def warmup(self, tolerance=0.01, num_frames_per_round=250, num_hits=3):
+    def warmup(self, tolerance=0.01, num_frames_per_round=100, num_hits=3):
         fps_target = self.fps - tolerance * self.fps
         
         print('Camera warmup, FPS target >= {:.1f}'.format(fps_target))
