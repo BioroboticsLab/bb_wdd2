@@ -1,3 +1,7 @@
 numpy>=1.10.2
 scipy>=0.16.1
 scikit-image>=0.10.0
+multiprocessing_generator>=0.2
+click>=6.7
+iso8601>=0.1.12
+imageio>=2.3.0
