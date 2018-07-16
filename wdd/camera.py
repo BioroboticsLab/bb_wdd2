@@ -30,8 +30,7 @@ class Camera:
         if not ret:
             return ret, frame_orig, frame_orig
         
-        frame = ((cv2.cvtColor(frame_orig, cv2.COLOR_BGR2GRAY) / 255) * 2) - 1
-        frame = resize(frame, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
+        frame = resize(frame_orig, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
         
         if self.background is None:
             self.background = np.copy(frame)
@@ -84,6 +83,7 @@ class OpenCVCapture(Camera):
         
     def _get_frame(self):
         ret, frame_orig = self.cap.read()
+        frame_orig = ((cv2.cvtColor(frame_orig, cv2.COLOR_BGR2GRAY) / 255) * 2) - 1
         return ret, frame_orig
     
     
@@ -122,6 +122,8 @@ class Flea3Capture(Camera):
     
         image.save(ramdisk_path, PyCapture2.IMAGE_FILE_FORMAT.BMP)
         im = imread(ramdisk_path, format='bmp')
+        im = (im[::3, ::3].astype(np.float32) / 255) * 2 - 1
+
         return True, im
 
 
