@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+from imageio import imread
 from skimage.transform import resize
 import time
 
@@ -99,11 +100,11 @@ class Flea3Capture(Camera):
             raise RuntimeError('No Flea3 camera detected')
         
         self.cap = PyCapture2.Camera()
-        self.uid = bus.getCameraFromIndex(device)
+        self.uid = bus.getCameraFromIndex(int(device))
         self.cap.connect(self.uid)
         
         fmt7imgSet = PyCapture2.Format7ImageSettings(PyCapture2.MODE.MODE_4, 0, 0, 2048, 1080, PyCapture2.PIXEL_FORMAT.MONO8)
-        fmt7pktInf, isValid = c.validateFormat7Settings(fmt7imgSet)
+        fmt7pktInf, isValid = self.cap.validateFormat7Settings(fmt7imgSet)
         if not isValid:
             raise RuntimeError("Format7 settings are not valid!")
         
@@ -113,10 +114,15 @@ class Flea3Capture(Camera):
         self.cap.setProperty(type=PyCapture2.PROPERTY_TYPE.AUTO_EXPOSURE, absValue=False)
         self.cap.setProperty(type=PyCapture2.PROPERTY_TYPE.SHUTTER, absValue=1/fps * 1000)
         self.cap.setProperty(type=PyCapture2.PROPERTY_TYPE.GAIN, absValue=100)
+
+        self.cap.startCapture()
         
-    def _get_frame(self):
-        ret, frame_orig = self.cap.read()
-        return ret, frame_orig
+    def _get_frame(self, ramdisk_path=b'/home/ben/ramdisk/'):
+        image = self.cap.retrieveBuffer()
+    
+        image.save(ramdisk_path, PyCapture2.IMAGE_FILE_FORMAT.BMP)
+        im = imread(ramdisk_path, format='bmp')
+        return True, im
 
 
 def cam_generator(cam_object, *args, **kwargs):
