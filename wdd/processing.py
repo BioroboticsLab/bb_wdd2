@@ -1,30 +1,16 @@
-#!/usr/bin/env python3
-
-import sys
-import time
-from collections import namedtuple
-
-import click
-
+from datetime import datetime
 import numpy as np
-import cv2
-
 import scipy
 from scipy.optimize import linear_sum_assignment
-
-from skimage.transform import resize
-from skimage import measure 
 from skimage import morphology
-from skimage import filters
-from skimage import color
+from skimage import measure
 
+from wdd.datastructures import Waggle
 
-Waggle = namedtuple('Waggle', ['xs', 'ys', 'ts'])
-# TODO add timestamp and maybe confidence
 
 class FrequencyDetector:
     def __init__(self, buffer_size=32, width=160, height=120, fps=100,
-                 freq_min=12, freq_max=14, num_base_functions=10, num_shifts=2):
+                 freq_min=11, freq_max=15, num_base_functions=5, num_shifts=2):
         self.buffer_size = buffer_size
         self.width = width
         self.height = height 
@@ -46,12 +32,11 @@ class FrequencyDetector:
         sin_values = [np.sin(values + factor * np.pi * 2 * np.pi) for factor in range(num_shifts)]
         return np.stack(sin_values).astype(np.float32)
     
-    @profile
-    def process(self, frame):
+    def process(self, frame, background):
         self.buffer[self.buffer_idx] = frame
         frame_diff = self.buffer[None, None, self.buffer_idx, :, :] - \
             self.buffer[None, None, (self.buffer_idx-1) % self.buffer_size, :, :]
-        #frame_diff /= np.abs(self.buffer[None, None, self.buffer_idx, :, :])
+        frame_diff /= background[None, None, :, :] + 1
         
         self.activity -= self.responses[self.buffer_idx]
         
@@ -62,31 +47,34 @@ class FrequencyDetector:
         self.buffer_idx += 1
         self.buffer_idx %= self.buffer_size
         
-        return (self.activity ** 2).sum(axis=(0, 1))
-
-
+        return (self.activity ** 2).sum(axis=(0, 1)), frame_diff
+    
+    
 class WaggleDetector:
     def __init__(self, max_distance, binarization_threshold,
                  max_frame_distance, min_num_detections,
-                 dilation_selem_radius=6//2):
+                 exporter, dilation_selem_radius, debug=False):
         self.max_distance = max_distance
         self.binarization_threshold = binarization_threshold
         self.max_frame_distance = max_frame_distance
         self.min_num_detections = min_num_detections
+        self.exporter = exporter
         self.selem = morphology.selem.disk(dilation_selem_radius)
+        self.debug = debug
         
         self.current_waggles = []
-        self.finalized_waggles = []
+        if debug:
+            self.finalized_waggles = []
         
-    @profile
     def finalize_frames(self, frame_idx):
         new_current_waggles = []
         
         for waggle_idx, waggle in enumerate(self.current_waggles):
             if (frame_idx - waggle.ts[-1]) > self.max_frame_distance:
                 if (len(waggle.ts)) > self.min_num_detections:
-                    self.finalized_waggles.append(waggle)
-                    # store waggle
+                    if self.debug:
+                        self.finalized_waggles.append(waggle)
+                    self.exporter.export(frame_idx, waggle)
                     pass
                 else:
                     # discard waggle
@@ -95,7 +83,6 @@ class WaggleDetector:
                 new_current_waggles.append(waggle)
         self.current_waggles = new_current_waggles
         
-    @profile
     def _get_activity_regions(self, activity):
         blobs = activity > self.binarization_threshold
         blobs_morph = morphology.opening(blobs)
@@ -109,12 +96,12 @@ class WaggleDetector:
             
         return frame_waggle_positions
     
-    @profile
     def _assign_regions_to_waggles(self, frame_idx, frame_waggle_positions):
         if len(self.current_waggles) == 0 and len(frame_waggle_positions) > 0:
             for region_idx in range(len(frame_waggle_positions)):
                 self.current_waggles.append(
-                    Waggle(xs=[frame_waggle_positions[region_idx][1]],
+                    Waggle(timestamp=datetime.now(),
+                           xs=[frame_waggle_positions[region_idx][1]],
                            ys=[frame_waggle_positions[region_idx][0]],
                            ts=[frame_idx]))
             return
@@ -156,135 +143,15 @@ class WaggleDetector:
             # unassigned activity regions become new tracked waggles
             for region_index in unassigned_fpws:
                 self.current_waggles.append(
-                    Waggle(xs=[frame_waggle_positions[region_index][1]],
+                    Waggle(timestamp=datetime.now(),
+                           xs=[frame_waggle_positions[region_index][1]],
                            ys=[frame_waggle_positions[region_index][0]],
                            ts=[frame_idx]))
                 
-    @profile
-    def process(self, frame_idx, activity):
+    def process(self, frame_idx, activity, warmup=100):
         self.finalize_frames(frame_idx)
         
         frame_waggle_positions = self._get_activity_regions(activity)
-        self._assign_regions_to_waggles(frame_idx, frame_waggle_positions)
-
-
-class Camera:
-    def __init__(self, height, width, fps, device):
-        self.fps = fps
-        self.height = height
-        self.width = width
-        self.cap = cv2.VideoCapture(device)
-        self.cap.set(cv2.CAP_PROP_FPS, fps)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         
-    @profile
-    def get_frame(self):
-        ret, frame_orig = self.cap.read()
-        
-        if not ret:
-            return ret, frame_orig, frame_orig
-        
-        frame = ((cv2.cvtColor(frame_orig, cv2.COLOR_BGR2GRAY) / 255) * 2) - 1
-
-        if frame.shape != (self.height, self.width):
-            frame = resize(frame, (self.height, self.width), mode='constant', anti_aliasing=True)
-
-        return ret, frame, frame_orig
-    
-    def warmup(self, tolerance=0.01, num_frames_per_round=50, num_hits=2):
-        fps_target = self.fps - tolerance * self.fps
-        
-        print('Camera warmup, FPS target >= {:.1f}'.format(fps_target))
-        
-        hits = 0
-        while True:
-            frame_idx = 0
-            start_time = time.time()
-            
-            for _ in range(num_frames_per_round):
-                ret, _, _ = self.get_frame()
-                assert ret
-                
-                frame_idx += 1
-                
-            end_time = time.time()
-            processing_fps = frame_idx / (end_time - start_time)
-            fps_target_hit = processing_fps > fps_target
-            
-            if fps_target_hit:
-                hits += 1
-            else:
-                hits = 0
-                
-            print('FPS: {:.1f} [{}]'.format(processing_fps, fps_target_hit))    
-            
-            if hits >= num_hits:
-                print('Success')
-                break
-
-@click.command()
-@click.option('--video_device', help='OpenCV video device. Can be camera index or video path')
-@click.option('--height', default=120, help='Video frame height in px')
-@click.option('--width', default=160, help='Video frame width in px')
-@click.option('--fps', default=100, help='Frames per second')
-@click.option('--bee_length', default=160, help='Approximate length of a bee in px')
-@click.option('--binarization_threshold', default=3.5, help='Binarization threshold for waggle detection in log scale. Can be used to tune sensitivity/specitivity')
-@click.option('--max_frame_distance', default=0.05, help='Maximum time inbetween frequency detections within one waggle in seconds')
-@click.option('--min_num_detections', default=0.2, help='Minimum time of a waggle in seconds')
-@click.option('--debug', default=False, help='Enable debug outputs/visualization')
-def run(video_device, height, width, fps, bee_length, binarization_threshold, max_frame_distance, min_num_detections, debug):
-    max_distance = bee_length / 4
-    binarization_threshold = np.expm1(binarization_threshold)
-    max_frame_distance = max_frame_distance * fps
-    min_num_detections = min_num_detections * fps
-
-    dd = FrequencyDetector(height=height, width=width, fps=fps)
-    wd = WaggleDetector(max_distance=max_distance, binarization_threshold=binarization_threshold, 
-                        max_frame_distance=max_frame_distance, min_num_detections=min_num_detections)
-    cam = Camera(width=width, height=height, fps=fps, device=video_device)
-    cam.warmup()
-
-    frame_idx = 0
-    start_time = time.time()
-    while True:
-        if frame_idx % 1000 == 0:
-            start_time = time.time()
-
-        ret, frame, frame_orig = cam.get_frame()
-        
-        if not ret:
-            print('Unable to retrieve frame from video device')
-            break
-        
-        activity = dd.process(frame)
-        wd.process(frame_idx, activity)
-        
-        if debug and frame_idx % 11 == 0:
-            current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
-            current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.current_waggles]
-            for blob_index, ((y, x), nd) in enumerate(zip(current_waggle_positions, current_waggle_num_detections)):
-                cv2.circle(frame_orig, (int(x * 4), int(y * 4)), 10, (0, 0, 255), 5)
-                    
-            current_waggle_num_detections = [len(w.xs) for w in wd.finalized_waggles]
-            current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.finalized_waggles]
-            for blob_index, ((y, x), nd) in enumerate(zip(current_waggle_positions, current_waggle_num_detections)):
-                cv2.circle(frame_orig, (int(x * 4), int(y * 4)), 10, (255, 255, 255), 5)
-                    
-            cv2.imshow('Image', frame_orig)
-            cv2.imshow('FrequencyDetector', activity)
-            
-            cv2.waitKey(1)
-        
-        end_time = time.time()
-        processing_fps = ((frame_idx % 1000) + 1) / (end_time - start_time)
-        frame_idx = (frame_idx + 1)
-        
-        sys.stdout.write('\rCurrently processing with {:.1f} fps '.format(processing_fps))
-        
-    cap.release()
-
-
-if __name__ == '__main__':
-    run()
-
+        if frame_idx > warmup:
+            self._assign_regions_to_waggles(frame_idx, frame_waggle_positions)
