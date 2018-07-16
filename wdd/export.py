@@ -46,4 +46,4 @@ class WaggleExporter:
         for im_idx, idx in enumerate(range(frame_idx-frame_idx_offset, frame_idx)):
             idx %= self.full_frame_buffer_len
             roi = self.full_frame_buffer[idx, center_x-self.pad_size:center_x+self.pad_size, center_y-self.pad_size:center_y+self.pad_size]
-            imsave(join(waggle_path, '{:03d}.png'.format(im_idx)), cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY))
+            imsave(join(waggle_path, '{:03d}.png'.format(im_idx)), roi)
