@@ -30,7 +30,9 @@ class Camera:
         if not ret:
             return ret, frame_orig, frame_orig
         
-        frame = resize(frame_orig, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
+        #FIXME: temporary hack to speed up image aquisition using Flea3 in the BeesBook setup
+        #frame = resize(frame_orig, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
+        frame = frame_orig[::2, ::2]
         
         if self.background is None:
             self.background = np.copy(frame)

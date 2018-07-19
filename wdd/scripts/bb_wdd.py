@@ -16,7 +16,7 @@ from wdd.export import WaggleExporter
 @click.option('--capture_type', default='OpenCV', help='Whether to use OpenCV or PyCapture2 to aquire images')
 @click.option('--video_device', required=True, help='OpenCV video device. Can be camera index or video path')
 @click.option('--height', default=180, help='Video frame height in px')
-@click.option('--width', default=341, help='Video frame width in px')
+@click.option('--width', default=342, help='Video frame width in px')
 @click.option('--fps', default=60, help='Frames per second')
 @click.option('--bee_length', default=20, help='Approximate length of a bee in px')
 @click.option('--binarization_threshold', default=3.25, help='Binarization threshold for waggle detection in log scale. Can be used to tune sensitivity/specitivity')
