@@ -41,9 +41,12 @@ class WaggleExporter:
             frame_idx_offset = self.full_frame_buffer_len - 1
             print('Warning: Waggle ({}) longer than frame buffer size'.format(waggle_path))
             
-        center_x = int(np.median(waggle.xs)) + self.pad_size
-        center_y = int(np.median(waggle.ys)) + self.pad_size
-        
+
+        # FIXME: why are coordinates inverted at this point?
+        # FIXME: scaling factor should depend on camera resolution
+        center_y = int(np.median(waggle.xs) * 2) + self.pad_size
+        center_x = int(np.median(waggle.ys) * 2) + self.pad_size
+
         for im_idx, idx in enumerate(range(frame_idx-frame_idx_offset, frame_idx)):
             idx %= self.full_frame_buffer_len
             roi = self.full_frame_buffer[idx, center_x-self.pad_size:center_x+self.pad_size, center_y-self.pad_size:center_y+self.pad_size]
