@@ -1,4 +1,5 @@
 import cv2
+from datetime import datetime
 import numpy as np
 import os
 from os.path import join
@@ -25,7 +26,7 @@ class WaggleExporter:
         waggle_path = join(waggle_path, str(waggle_idx))
         makedirs(waggle_path, exist_ok=True)
 
-        print('\nSaving new waggle: {}'.format(waggle_path))
+        print('\n{}: Saving new waggle: {}'.format(datetime.now(), waggle_path))
         
         json.dump(
             {
