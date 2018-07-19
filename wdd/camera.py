@@ -107,8 +107,10 @@ class Flea3Capture(Camera):
             raise RuntimeError('No Flea3 camera detected')
         
         self.cap = PyCapture2.Camera()
-        self.uid = bus.getCameraFromIndex(int(device))
+        self.uid = bus.getCameraFromSerialNumber(int(device))
         self.cap.connect(self.uid)
+        
+        self.print_cam_info(self.cap)
         
         fmt7imgSet = PyCapture2.Format7ImageSettings(PyCapture2.MODE.MODE_4, 0, 0, 2048, 1080, PyCapture2.PIXEL_FORMAT.MONO8)
         fmt7pktInf, isValid = self.cap.validateFormat7Settings(fmt7imgSet)
@@ -123,6 +125,18 @@ class Flea3Capture(Camera):
         self.cap.setProperty(type=PyCapture2.PROPERTY_TYPE.GAIN, absValue=100)
 
         self.cap.startCapture()
+
+    def print_cam_info(cam):
+        camInfo = cam.getCameraInfo()
+        print("\n*** CAMERA INFORMATION ***\n")
+        print("Serial number - ", camInfo.serialNumber)
+        print("Camera model - ", camInfo.modelName)
+        print("Camera vendor - ", camInfo.vendorName)
+        print("Sensor - ", camInfo.sensorInfo)
+        print("Resolution - ", camInfo.sensorResolution)
+        print("Firmware version - ", camInfo.firmwareVersion)
+        print("Firmware build time - ", camInfo.firmwareBuildTime)
+        print()
         
     def _get_frame(self):
         image = self.cap.retrieveBuffer()
