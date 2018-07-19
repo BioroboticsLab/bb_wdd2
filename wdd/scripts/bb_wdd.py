@@ -64,7 +64,8 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
                 print('Unable to retrieve frame from video device')
                 break
     
-            full_frame_buffer[frame_idx % full_frame_buffer_len, pad_size:-pad_size, pad_size:-pad_size] = frame_orig.copy()
+            full_frame_buffer[frame_idx % full_frame_buffer_len, pad_size:-pad_size, pad_size:-pad_size] = \
+                (((frame_orig + 1) / 2) * 255).astype(np.uint8)
     
             r = dd.process(frame, background)
             if r is not None:
