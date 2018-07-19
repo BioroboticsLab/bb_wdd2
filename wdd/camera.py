@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from imageio import imread
+from imageio import imread, get_reader
 import scipy
 from skimage.transform import resize
 import time
@@ -124,15 +124,16 @@ class Flea3Capture(Camera):
 
         self.cap.startCapture()
         
-    def _get_frame(self, ramdisk_path=b'/home/ben/ramdisk/'):
+    def _get_frame(self):
         image = self.cap.retrieveBuffer()
     
-        image.save(ramdisk_path, PyCapture2.IMAGE_FILE_FORMAT.BMP)
-        im = imread(ramdisk_path, format='bmp')
+        image.save(b'/home/ben/ramdisk/dummy.bmp', PyCapture2.IMAGE_FILE_FORMAT.BMP)
+
+        self.reader = get_reader('/home/ben/ramdisk/dummy.bmp', format='bmp', mode='i')
+        im = self.reader.get_data(0)
         im = (im[::3, ::3].astype(np.float32) / 255) * 2 - 1
 
         return True, im
-
 
 def cam_generator(cam_object, *args, **kwargs):
     cam = cam_object(*args, **kwargs)
