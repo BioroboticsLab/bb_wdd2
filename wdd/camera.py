@@ -17,9 +17,10 @@ class Camera:
         if alpha is not None:
             self.alpha = alpha
         else:
-            self.alpha = .99
+            self.alpha = .95
         self.height = height
         self.width = width
+        self.counter = 0
         
     def _get_frame(self):
         raise NotImplementedError()
@@ -37,7 +38,10 @@ class Camera:
         if self.background is None:
             self.background = np.copy(frame)
         else:
-            self.background = self.alpha * self.background + (1 - self.alpha) * frame
+            if self.counter % 100 == 0:
+                self.background = self.alpha * self.background + (1 - self.alpha) * frame
+
+        self.counter += 1
             
         return ret, frame, frame_orig
     
