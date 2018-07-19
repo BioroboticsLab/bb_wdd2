@@ -53,7 +53,7 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
 
     frame_idx = 0
     start_time = time.time()
-    with ParallelGenerator(cam_generator(cam_obj, width=width, height=height, fps=fps, device=video_device)) as gen:
+    with ParallelGenerator(cam_generator(cam_obj, width=width, height=height, fps=fps, device=video_device), max_lookahead=fps) as gen:
         for ret, frame, frame_orig, background in gen:
             if frame_idx % 1000 == 0:
                 start_time = time.time()
