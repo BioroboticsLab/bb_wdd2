@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 from imageio import imread
+import scipy
 from skimage.transform import resize
 import time
 
