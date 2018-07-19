@@ -1,8 +1,10 @@
 import click
 import cv2
+import os
 import sys
 import time
 import numpy as np
+from imageio import imsave
 
 from multiprocessing_generator import ParallelGenerator
 from skimage.transform import resize
@@ -18,15 +20,18 @@ from wdd.export import WaggleExporter
 @click.option('--height', default=180, help='Video frame height in px')
 @click.option('--width', default=342, help='Video frame width in px')
 @click.option('--fps', default=60, help='Frames per second')
-@click.option('--bee_length', default=20, help='Approximate length of a bee in px')
+@click.option('--bee_length', default=7, help='Approximate length of a bee in px')
 @click.option('--binarization_threshold', default=3.25, help='Binarization threshold for waggle detection in log scale. Can be used to tune sensitivity/specitivity')
 @click.option('--max_frame_distance', default=0.2, help='Maximum time inbetween frequency detections within one waggle in seconds')
 @click.option('--min_num_detections', default=0.2, help='Minimum time of a waggle in seconds')
 @click.option('--output_path', type=click.Path(exists=True), required=True, help='Output path for results.')
 @click.option('--cam_identifier', required=True, help='Identifier of camera (used in output storage path).')
+@click.option('--background_path', type=click.Path(exists=True), required=True, help='Where to load/store background image.')
 @click.option('--debug', default=False, help='Enable debug outputs/visualization')
-def main(capture_type, video_device, height, width, fps, bee_length, binarization_threshold, max_frame_distance, min_num_detections, output_path, cam_identifier, debug):
-    max_distance = bee_length / 4
+def main(capture_type, video_device, height, width, fps, bee_length, binarization_threshold, max_frame_distance, 
+         min_num_detections, output_path, cam_identifier, background_path, debug):
+    # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
+    max_distance = bee_length / 5
     binarization_threshold = np.expm1(binarization_threshold)
     max_frame_distance = max_frame_distance * fps
     min_num_detections = min_num_detections * fps
@@ -42,7 +47,7 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
     full_frame_buffer_roi_size = 50
     pad_size = full_frame_buffer_roi_size // 2
     full_frame_buffer_len = 100
-    full_frame_buffer = np.zeros((full_frame_buffer_len, 360 + 2 * pad_size, 683 + 2 * pad_size), dtype=np.uint8)
+    full_frame_buffer = np.zeros((full_frame_buffer_len, 360 + 2 * pad_size, 682 + 2 * pad_size), dtype=np.uint8)
 
     dd = FrequencyDetector(height=height, width=width, fps=fps)
     exporter = WaggleExporter(cam_id=cam_identifier, output_path=output_path, full_frame_buffer=full_frame_buffer,
@@ -51,15 +56,21 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
                         max_frame_distance=max_frame_distance, min_num_detections=min_num_detections,
                         dilation_selem_radius=5, exporter=exporter)
 
+    background_file = os.path.join(background_path, 'background_{}.npy'.format(cam_identifier))
+    if os.path.exists(background_file):
+        print('Loading background image: {}'.format(background_file))
+        background = np.load(background_file)
+    else:
+        print('No background image found for {}, starting from scratch'.format(cam_identifier))
+        background = None
+
     frame_idx = 0
     start_time = time.time()
-    with ParallelGenerator(cam_generator(cam_obj, width=width, height=height, fps=fps, device=video_device), max_lookahead=fps) as gen:
+    with ParallelGenerator(cam_generator(cam_obj, width=width, height=height, fps=fps, device=video_device, background=background), max_lookahead=fps) as gen:
         for ret, frame, frame_orig, background in gen:
-            if frame_idx % 1000 == 0:
+            if frame_idx % 10000 == 0:
                 start_time = time.time()
     
-            #ret, frame, frame_orig = cam.get_frame()
-            
             if not ret:
                 print('Unable to retrieve frame from video device')
                 break
@@ -71,26 +82,23 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
             if r is not None:
                 activity, frame_diff = r
                 wd.process(frame_idx, activity)
+
+            if frame_idx % 10000 == 0:
+                print('\nSaving background image: {}'.format(background_file))
+                np.save(background_file, background)
             
             # TODO Ben: Make relative to video size
-            if debug and frame_idx % 101 == 0:
+            if debug and frame_idx % 11 == 0:
                 current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
                 current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.current_waggles]
                 for blob_index, ((y, x), nd) in enumerate(zip(current_waggle_positions, current_waggle_num_detections)):
                     cv2.circle(frame_orig, (int(x * 2), int(y * 2)), 10, (0, 0, 255), 2)
                         
-                """
-                current_waggle_num_detections = [len(w.xs) for w in wd.finalized_waggles]
-                current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.finalized_waggles]
-                for blob_index, ((y, x), nd) in enumerate(zip(current_waggle_positions, current_waggle_num_detections)):
-                    cv2.circle(frame_orig, (int(x * 2), int(y * 2)), 10, (255, 255, 255), 2)
-                """
-    
-                cv2.imshow('Image', resize(frame_orig, (360 * 2, 682 * 2)))
+                cv2.imshow('WDD', resize((frame_orig + 1) / 2, (360 * 2, 682 * 2)))
                 cv2.waitKey(1)
             
             end_time = time.time()
-            processing_fps = ((frame_idx % 1000) + 1) / (end_time - start_time)
+            processing_fps = ((frame_idx % 10000) + 1) / (end_time - start_time)
             frame_idx = (frame_idx + 1)
             
             sys.stdout.write('\rCurrently processing with {:.1f} fps '.format(processing_fps))
