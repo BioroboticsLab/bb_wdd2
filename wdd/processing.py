@@ -1,9 +1,11 @@
+import cv2
 from datetime import datetime
 import numpy as np
 import scipy
 from scipy.optimize import linear_sum_assignment
 from skimage import morphology
 from skimage import measure
+from skimage.morphology.selem import _default_selem
 
 from wdd.datastructures import Waggle
 
@@ -59,6 +61,7 @@ class WaggleDetector:
         self.max_frame_distance = max_frame_distance
         self.min_num_detections = min_num_detections
         self.exporter = exporter
+        self.default_selem = _default_selem(2).astype(np.uint8)
         self.selem = morphology.selem.disk(dilation_selem_radius)
         self.debug = debug
         
@@ -84,9 +87,9 @@ class WaggleDetector:
         self.current_waggles = new_current_waggles
         
     def _get_activity_regions(self, activity):
-        blobs = activity > self.binarization_threshold
-        blobs_morph = morphology.opening(blobs)
-        blobs_morph = morphology.dilation(blobs_morph, self.selem)
+        blobs = (activity > self.binarization_threshold).astype(np.uint8)
+        blobs_morph = cv2.morphologyEx(blobs, cv2.MORPH_OPEN, self.default_selem)
+        blobs_morph = cv2.dilate(blobs_morph, self.selem)
         blobs_labels = measure.label(blobs_morph, background=0)
         
         frame_waggle_positions = []
