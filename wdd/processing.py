@@ -12,7 +12,7 @@ from wdd.datastructures import Waggle
 
 class FrequencyDetector:
     def __init__(self, buffer_size=32, width=160, height=120, fps=100,
-                 freq_min=11, freq_max=15, num_base_functions=5, num_shifts=2):
+                 freq_min=12, freq_max=14, num_base_functions=5, num_shifts=2):
         self.buffer_size = buffer_size
         self.width = width
         self.height = height 
@@ -38,18 +38,17 @@ class FrequencyDetector:
         self.buffer[self.buffer_idx] = frame
         frame_diff = self.buffer[None, None, self.buffer_idx, :, :] - \
             self.buffer[None, None, (self.buffer_idx-1) % self.buffer_size, :, :]
-        frame_diff /= background[None, None, :, :] + 1
         
         self.activity -= self.responses[self.buffer_idx]
         
-        self.responses[self.buffer_idx] = self.functions[:, :, self.buffer_idx, :, :] * frame_diff
+        self.responses[self.buffer_idx] = (self.functions[:, :, self.buffer_idx, :, :] * background[None, None, :, :]) * frame_diff
             
         self.activity += self.responses[self.buffer_idx]
-            
+
         self.buffer_idx += 1
         self.buffer_idx %= self.buffer_size
         
-        return (self.activity ** 2).sum(axis=(0, 1)), frame_diff
+        return (self.activity ** 2).max(axis=(0, 1)), self.buffer[self.buffer_idx]
     
     
 class WaggleDetector:
