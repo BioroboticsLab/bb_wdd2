@@ -13,21 +13,23 @@ from wdd.camera import OpenCVCapture, Flea3Capture, cam_generator
 from wdd.processing import FrequencyDetector, WaggleDetector
 from wdd.export import WaggleExporter
 
+def show_default_option(*args, **kwargs):
+    return click.option(show_default=True, *args, **kwargs)
 
 @click.command()
-@click.option('--capture_type', default='OpenCV', help='Whether to use OpenCV or PyCapture2 to aquire images')
+@show_default_option('--capture_type', default='PyCapture2', help='Whether to use OpenCV or PyCapture2 to aquire images')
 @click.option('--video_device', required=True, help='OpenCV video device. Can be camera index or video path')
-@click.option('--height', default=180, help='Video frame height in px')
-@click.option('--width', default=342, help='Video frame width in px')
-@click.option('--fps', default=60, help='Frames per second')
-@click.option('--bee_length', default=7, help='Approximate length of a bee in px')
-@click.option('--binarization_threshold', default=3.25, help='Binarization threshold for waggle detection in log scale. Can be used to tune sensitivity/specitivity')
-@click.option('--max_frame_distance', default=0.2, help='Maximum time inbetween frequency detections within one waggle in seconds')
-@click.option('--min_num_detections', default=0.2, help='Minimum time of a waggle in seconds')
+@show_default_option('--height', default=180, help='Video frame height in px')
+@show_default_option('--width', default=342, help='Video frame width in px')
+@show_default_option('--fps', default=60, help='Frames per second')
+@show_default_option('--bee_length', default=7, help='Approximate length of a bee in px')
+@show_default_option('--binarization_threshold', default=3.25, help='Binarization threshold for waggle detection in log scale. Can be used to tune sensitivity/specitivity')
+@show_default_option('--max_frame_distance', default=0.2, help='Maximum time inbetween frequency detections within one waggle in seconds')
+@show_default_option('--min_num_detections', default=0.2, help='Minimum time of a waggle in seconds')
 @click.option('--output_path', type=click.Path(exists=True), required=True, help='Output path for results.')
 @click.option('--cam_identifier', required=True, help='Identifier of camera (used in output storage path).')
 @click.option('--background_path', type=click.Path(exists=True), required=True, help='Where to load/store background image.')
-@click.option('--debug', default=False, help='Enable debug outputs/visualization')
+@show_default_option('--debug', default=False, help='Enable debug outputs/visualization')
 def main(capture_type, video_device, height, width, fps, bee_length, binarization_threshold, max_frame_distance, 
          min_num_detections, output_path, cam_identifier, background_path, debug):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
@@ -47,7 +49,7 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
     full_frame_buffer_roi_size = 50
     pad_size = full_frame_buffer_roi_size // 2
     full_frame_buffer_len = 100
-    full_frame_buffer = np.zeros((full_frame_buffer_len, 360 + 2 * pad_size, 682 + 2 * pad_size), dtype=np.uint8)
+    full_frame_buffer = np.zeros((full_frame_buffer_len, 360 + 2 * pad_size, 683 + 2 * pad_size), dtype=np.uint8)
 
     dd = FrequencyDetector(height=height, width=width, fps=fps)
     exporter = WaggleExporter(cam_id=cam_identifier, output_path=output_path, full_frame_buffer=full_frame_buffer,
@@ -64,9 +66,18 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
         print('No background image found for {}, starting from scratch'.format(cam_identifier))
         background = None
 
+    fullframe_path = os.path.join(output_path, 'fullframes')
+    if not os.path.exists(fullframe_path):
+        os.mkdir(fullframe_path)
+
+    frame_generator = cam_generator(cam_obj, width=width, height=height, fps=fps, device=video_device,
+                                    background=background, fullframe_path=fullframe_path)
+
+
     frame_idx = 0
     start_time = time.time()
-    with ParallelGenerator(cam_generator(cam_obj, width=width, height=height, fps=fps, device=video_device, background=background), max_lookahead=fps) as gen:
+
+    with ParallelGenerator(frame_generator, max_lookahead=fps) as gen:
         for ret, frame, frame_orig, background in gen:
             if frame_idx % 10000 == 0:
                 start_time = time.time()

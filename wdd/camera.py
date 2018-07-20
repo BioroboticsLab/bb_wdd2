@@ -1,15 +1,16 @@
 import numpy as np
 import cv2
-from imageio import imread, get_reader
+from datetime import datetime
+from imageio import imread, get_reader, imsave
 import scipy
 from skimage.transform import resize
 import time
+import os
 
 
 try:
     import PyCapture2
-except ImportError:
-    print("Unable to import PyCapture2, Flea3 cameras won't work")
+except ImportError: print("Unable to import PyCapture2, Flea3 cameras won't work")
         
         
 class Camera:
@@ -95,10 +96,13 @@ class OpenCVCapture(Camera):
     
     
 class Flea3Capture(Camera):
-    def __init__(self, height, width, fps, device, background=None, alpha=None, gain=100):
+    def __init__(self, height, width, fps, device, background=None, alpha=None, fullframe_path=None, gain=100):
         super().__init__(height, width, background, alpha)
         
         self.fps = fps
+        self.device = device
+        self.fullframe_path = fullframe_path
+        self.counter = 0
         
         bus = PyCapture2.BusManager()
         numCams = bus.getNumOfCameras()
@@ -145,6 +149,15 @@ class Flea3Capture(Camera):
 
         self.reader = get_reader('/home/ben/ramdisk/dummy.bmp', format='bmp', mode='i')
         im = self.reader.get_data(0)
+
+        # store on full frame image every hour
+        if self.counter % (self.fps * 60 * 60) == 0:
+            fullframe_im_path = os.path.join(self.fullframe_path, '{}-{}.png'.format(self.device, datetime.utcnow()))
+            print('\nStoring full frame image: {}'.format(fullframe_im_path))
+            imsave(fullframe_im_path, im)
+
+        self.counter += 1
+
         im = (im[::3, ::3].astype(np.float32) / 255) * 2 - 1
 
         return True, im
