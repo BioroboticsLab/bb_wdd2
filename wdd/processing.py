@@ -12,7 +12,7 @@ from wdd.datastructures import Waggle
 
 class FrequencyDetector:
     def __init__(self, buffer_size=32, width=160, height=120, fps=100,
-                 freq_min=12, freq_max=14, num_base_functions=5, num_shifts=2):
+                 freq_min=12, freq_max=14, num_base_functions=3, num_shifts=4):
         self.buffer_size = buffer_size
         self.width = width
         self.height = height 
@@ -28,27 +28,35 @@ class FrequencyDetector:
         self.frequencies = np.linspace(freq_min, freq_max + 1, num=num_base_functions)
         self.functions = [self._get_base_function(f, num_shifts) for f in self.frequencies]
         self.functions = np.stack(self.functions, axis=0)[:, :, :, None, None]
+
+        self.function_std = np.std(self.functions, axis=2)
+
+        self.alpha = .5
+        self.frame_diffs = np.zeros((buffer_size, height, width), dtype=np.float32)
         
     def _get_base_function(self, frequency, num_shifts=2):
         values = (np.linspace(0, (self.buffer_size / self.fps) * 2 * np.pi, num=self.buffer_size) * frequency)
-        sin_values = [np.sin(values + factor * np.pi * 2 * np.pi) for factor in range(num_shifts)]
+        sin_values = [np.sin(values + factor * (2 * np.pi) / num_shifts * 2 * np.pi) for factor in range(num_shifts)]
         return np.stack(sin_values).astype(np.float32)
     
     def process(self, frame, background):
         self.buffer[self.buffer_idx] = frame
+
         frame_diff = self.buffer[None, None, self.buffer_idx, :, :] - \
             self.buffer[None, None, (self.buffer_idx-1) % self.buffer_size, :, :]
-        
+        self.frame_diffs[(self.buffer_idx-1) % self.buffer_size, :, :] = frame_diff[0, 0, :, :]
+
         self.activity -= self.responses[self.buffer_idx]
         
-        self.responses[self.buffer_idx] = (self.functions[:, :, self.buffer_idx, :, :] * background[None, None, :, :]) * frame_diff
+        self.responses[self.buffer_idx] = self.functions[:, :, self.buffer_idx, :, :] * frame_diff
+        self.responses[self.buffer_idx] /= (self.function_std * np.std(self.frame_diffs, axis=0) + 1e-3)
             
         self.activity += self.responses[self.buffer_idx]
 
         self.buffer_idx += 1
         self.buffer_idx %= self.buffer_size
         
-        return (self.activity ** 2).max(axis=(0, 1)), self.buffer[self.buffer_idx]
+        return (self.activity ** 2).max(axis=(0, 1)), frame_diff
     
     
 class WaggleDetector:

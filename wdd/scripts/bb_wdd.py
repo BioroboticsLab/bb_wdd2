@@ -25,7 +25,7 @@ def show_default_option(*args, **kwargs):
 @show_default_option('--bee_length', default=7, help='Approximate length of a bee in px')
 @show_default_option('--binarization_threshold', default=0.2, help='Binarization threshold for waggle detection in log scale. Can be used to tune sensitivity/specitivity')
 @show_default_option('--max_frame_distance', default=0.2, help='Maximum time inbetween frequency detections within one waggle in seconds')
-@show_default_option('--min_num_detections', default=0.2, help='Minimum time of a waggle in seconds')
+@show_default_option('--min_num_detections', default=0.1, help='Minimum time of a waggle in seconds')
 @click.option('--output_path', type=click.Path(exists=True), required=True, help='Output path for results.')
 @click.option('--cam_identifier', required=True, help='Identifier of camera (used in output storage path).')
 @click.option('--background_path', type=click.Path(exists=True), required=True, help='Where to load/store background image.')
@@ -33,7 +33,7 @@ def show_default_option(*args, **kwargs):
 def main(capture_type, video_device, height, width, fps, bee_length, binarization_threshold, max_frame_distance, 
          min_num_detections, output_path, cam_identifier, background_path, debug):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
-    max_distance = bee_length / 5
+    max_distance = bee_length
     binarization_threshold = np.expm1(binarization_threshold)
     max_frame_distance = max_frame_distance * fps
     min_num_detections = min_num_detections * fps
@@ -56,7 +56,7 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
                               full_frame_buffer_len=full_frame_buffer_len, full_frame_buffer_roi_size=full_frame_buffer_roi_size)
     wd = WaggleDetector(max_distance=max_distance, binarization_threshold=binarization_threshold, 
                         max_frame_distance=max_frame_distance, min_num_detections=min_num_detections,
-                        dilation_selem_radius=5, exporter=exporter)
+                        dilation_selem_radius=7, exporter=exporter)
 
     background_file = os.path.join(background_path, 'background_{}.npy'.format(cam_identifier))
     if os.path.exists(background_file):
