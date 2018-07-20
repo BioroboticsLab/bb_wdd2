@@ -155,13 +155,10 @@ class Flea3Capture(Camera):
         print()
         
     def _get_frame(self):
-        image = self.cap.retrieveBuffer()
+        # This requires a modified PyCapture2 with numpy bindings
+        # https://github.com/GreenSlime96/PyCapture2_NumPy
+        im = np.array(self.cap.retrieveBuffer())
     
-        image.save(bytes('/home/ben/ramdisk/{}.bmp'.format(self.device), encoding='utf-8'), PyCapture2.IMAGE_FILE_FORMAT.BMP)
-
-        self.reader = get_reader('/home/ben/ramdisk/{}.bmp'.format(self.device), format='bmp', mode='i')
-        im = self.reader.get_data(0)
-
         # store on full frame image every hour
         if self.counter % (self.fps * 60 * 60) == 0:
             fullframe_im_path = os.path.join(self.fullframe_path, '{}-{}.png'.format(self.device, datetime.utcnow()))
