@@ -157,9 +157,9 @@ class Flea3Capture(Camera):
     def _get_frame(self):
         image = self.cap.retrieveBuffer()
     
-        image.save(b'/home/ben/ramdisk/dummy.bmp', PyCapture2.IMAGE_FILE_FORMAT.BMP)
+        image.save(bytes('/home/ben/ramdisk/{}.bmp'.format(self.device), encoding='utf-8'), PyCapture2.IMAGE_FILE_FORMAT.BMP)
 
-        self.reader = get_reader('/home/ben/ramdisk/dummy.bmp', format='bmp', mode='i')
+        self.reader = get_reader('/home/ben/ramdisk/{}.bmp'.format(self.device), format='bmp', mode='i')
         im = self.reader.get_data(0)
 
         # store on full frame image every hour
