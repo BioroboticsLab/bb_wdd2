@@ -26,7 +26,7 @@ class WaggleExporter:
         waggle_path = join(waggle_path, str(waggle_idx))
         makedirs(waggle_path, exist_ok=True)
 
-        print('\n{}: Saving new waggle: {}'.format(datetime.now(), waggle_path))
+        print('\n{} - {}: Saving new waggle: {}'.format(self.cam_id, datetime.utcnow(), waggle_path))
         
         json.dump(
             {

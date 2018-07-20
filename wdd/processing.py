@@ -103,7 +103,7 @@ class WaggleDetector:
         if len(self.current_waggles) == 0 and len(frame_waggle_positions) > 0:
             for region_idx in range(len(frame_waggle_positions)):
                 self.current_waggles.append(
-                    Waggle(timestamp=datetime.now(),
+                    Waggle(timestamp=datetime.utcnow(),
                            xs=[frame_waggle_positions[region_idx][1]],
                            ys=[frame_waggle_positions[region_idx][0]],
                            ts=[frame_idx]))
@@ -146,7 +146,7 @@ class WaggleDetector:
             # unassigned activity regions become new tracked waggles
             for region_index in unassigned_fpws:
                 self.current_waggles.append(
-                    Waggle(timestamp=datetime.now(),
+                    Waggle(timestamp=datetime.utcnow(),
                            xs=[frame_waggle_positions[region_index][1]],
                            ys=[frame_waggle_positions[region_index][0]],
                            ts=[frame_idx]))
