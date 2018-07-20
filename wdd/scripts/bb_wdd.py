@@ -112,7 +112,7 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
             processing_fps = ((frame_idx % 10000) + 1) / (end_time - start_time)
             frame_idx = (frame_idx + 1)
             
-            sys.stdout.write('\rCurrently processing with {:.1f} fps '.format(processing_fps))
+            sys.stdout.write('\rCurrently processing with FPS: {:.1f} | Max DD: {:.2f}'.format(processing_fps, np.log1p(activity.max())))
 
 
 if __name__ == '__main__':
