@@ -9,13 +9,14 @@ import iso8601
 from skimage.io import imsave
 
 class WaggleExporter:
-    def __init__(self, cam_id, output_path, full_frame_buffer, full_frame_buffer_len, full_frame_buffer_roi_size):
+    def __init__(self, cam_id, output_path, full_frame_buffer, full_frame_buffer_len, full_frame_buffer_roi_size, min_images=32):
         self.cam_id = cam_id
         self.output_path = output_path
         self.full_frame_buffer = full_frame_buffer
         self.full_frame_buffer_len = full_frame_buffer_len
         self.full_frame_buffer_roi_size = full_frame_buffer_roi_size
         self.pad_size = self.full_frame_buffer_roi_size // 2
+        self.min_images = min_images
         
     def export(self, frame_idx, waggle):
         dt = waggle.timestamp
@@ -40,7 +41,8 @@ class WaggleExporter:
         if frame_idx_offset >= self.full_frame_buffer_len:
             frame_idx_offset = self.full_frame_buffer_len - 1
             print('Warning: Waggle ({}) longer than frame buffer size'.format(waggle_path))
-            
+        elif frame_idx_offset < self.min_images:
+            frame_idx_offset = self.min_images
 
         # FIXME: why are coordinates inverted at this point?
         # FIXME: scaling factor should depend on camera resolution
