@@ -23,7 +23,7 @@ def show_default_option(*args, **kwargs):
 @show_default_option('--width', default=342, help='Video frame width in px')
 @show_default_option('--fps', default=60, help='Frames per second')
 @show_default_option('--bee_length', default=7, help='Approximate length of a bee in px')
-@show_default_option('--binarization_threshold', default=0.2, help='Binarization threshold for waggle detection in log scale. Can be used to tune sensitivity/specitivity')
+@show_default_option('--binarization_threshold', default=6., help='Binarization threshold for waggle detection in log scale. Can be used to tune sensitivity/specitivity')
 @show_default_option('--max_frame_distance', default=0.2, help='Maximum time inbetween frequency detections within one waggle in seconds')
 @show_default_option('--min_num_detections', default=0.1, help='Minimum time of a waggle in seconds')
 @click.option('--output_path', type=click.Path(exists=True), required=True, help='Output path for results.')
