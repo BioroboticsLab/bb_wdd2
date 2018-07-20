@@ -80,7 +80,7 @@ class Camera:
 
 
 class OpenCVCapture(Camera):
-    def __init__(self, height, width, fps, device, background=None, alpha=None):
+    def __init__(self, height, width, fps, device, background=None, alpha=None, fullframe_path=None):
         super().__init__(height, width, background, alpha)
         
         self.fps = fps
