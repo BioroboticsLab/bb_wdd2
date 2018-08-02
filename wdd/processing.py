@@ -9,6 +9,22 @@ from skimage.morphology.selem import _default_selem
 
 from wdd.datastructures import Waggle
 
+import numba
+
+@numba.jit(nopython=True, parallel=True)
+def pixel_wise_std(frames, std_buffer):
+    """Takes an array of images and an output image of the same height and width.
+    Calculates the standard deviation of every pixel in the frames argument.
+    This is equal to calling std_buffer = np.std(frames, axis=0) but faster.
+
+    Arguments:
+        frames: np.array of shape (N, H, W) containing N images.
+        std_buffer: output argument of shape (H, W) that will contain the standard
+                    deviations of the first axis of the frames argument.
+    """
+    for y in numba.prange(std_buffer.shape[0]):
+        for x in numba.prange(std_buffer.shape[1]):
+            std_buffer[y, x] = np.std(frames[:, y, x])
 
 class FrequencyDetector:
     def __init__(self, buffer_size=32, width=160, height=120, fps=100,
@@ -33,7 +49,8 @@ class FrequencyDetector:
 
         self.alpha = .5
         self.frame_diffs = np.zeros((buffer_size, height, width), dtype=np.float32)
-        
+        self.frame_diffs_std = np.zeros(shape=(height, width), dtype=np.float32)
+
     def _get_base_function(self, frequency, num_shifts=2):
         values = (np.linspace(0, (self.buffer_size / self.fps) * 2 * np.pi, num=self.buffer_size) * frequency)
         sin_values = [np.sin(values + factor * (2 * np.pi) / num_shifts * 2 * np.pi) for factor in range(num_shifts)]
@@ -47,10 +64,13 @@ class FrequencyDetector:
         self.frame_diffs[(self.buffer_idx-1) % self.buffer_size, :, :] = frame_diff[0, 0, :, :]
 
         self.activity -= self.responses[self.buffer_idx]
-        
-        self.responses[self.buffer_idx] = self.functions[:, :, self.buffer_idx, :, :] * frame_diff
-        self.responses[self.buffer_idx] /= (self.function_std * np.std(self.frame_diffs, axis=0) + 1e-3)
-            
+        # Calculate the standard deviation of every pixel in the difference buffers.
+        pixel_wise_std(self.frame_diffs, self.frame_diffs_std)
+        # Now, the following assertion holds true:
+        # assert np.allclose(self.frame_diffs_std, self.frame_diffs.std(axis=0))
+        # Calculate the normalized correlation between the base functions and the images.
+        self.responses[self.buffer_idx] = (self.functions[:, :, self.buffer_idx, :, :] * frame_diff) \
+                                            / (self.function_std * self.frame_diffs_std + 1e-3)
         self.activity += self.responses[self.buffer_idx]
 
         self.buffer_idx += 1
