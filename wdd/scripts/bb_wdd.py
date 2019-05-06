@@ -45,8 +45,7 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
     else:
         raise RuntimeError('capture_type must be either OpenCV or PyCapture2')
     
-    # TODO Ben: respect original video size
-    full_frame_buffer_roi_size = 50
+    full_frame_buffer_roi_size = bee_length * 10
     pad_size = full_frame_buffer_roi_size // 2
     full_frame_buffer_len = 100
     full_frame_buffer = np.zeros((full_frame_buffer_len, 360 + 2 * pad_size, 683 + 2 * pad_size), dtype=np.uint8)
