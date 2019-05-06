@@ -82,13 +82,18 @@ class Camera:
 
 class OpenCVCapture(Camera):
     def __init__(self, height, width, fps, device, background=None, alpha=None, fullframe_path=None):
-        super().__init__(height, width, background, alpha)
+        super().__init__(height, width, fps, background, alpha)
         
         self.fps = fps
         self.cap = cv2.VideoCapture(device)
-        self.cap.set(cv2.CAP_PROP_FPS, fps)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+
+        try:
+            self.cap.set(cv2.CAP_PROP_FPS, fps)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        except Exception as err:
+            print('Unable to set OpenCV capture properties: ')
+            print(err)
         
     def _get_frame(self):
         ret, frame_orig = self.cap.read()
