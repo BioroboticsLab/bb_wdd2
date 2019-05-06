@@ -14,7 +14,7 @@ except ImportError: print("Unable to import PyCapture2, Flea3 cameras won't work
         
         
 class Camera:
-    def __init__(self, height, width, background=None, alpha=None):
+    def __init__(self, height, width, fps, background=None, alpha=None):
         self.background = background
         if alpha is not None:
             self.alpha = alpha
@@ -22,6 +22,7 @@ class Camera:
             self.alpha = .95
         self.height = height
         self.width = width
+        self.fps = fps
         self.counter = 0
         
     def _get_frame(self):
@@ -97,7 +98,7 @@ class OpenCVCapture(Camera):
     
 class Flea3Capture(Camera):
     def __init__(self, height, width, fps, device, background=None, alpha=None, fullframe_path=None, gain=100):
-        super().__init__(height, width, background, alpha)
+        super().__init__(height, width, fps, background, alpha)
         
         self.fps = fps
         self.device = device
