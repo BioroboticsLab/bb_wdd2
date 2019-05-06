@@ -15,7 +15,8 @@ import numba
 def pixel_wise_std(frames, std_buffer):
     """Takes an array of images and an output image of the same height and width.
     Calculates the standard deviation of every pixel in the frames argument.
-    This is equal to calling std_buffer = np.std(frames, axis=0) but faster.
+    This is equal to calling std_buffer = np.std(frames, axis=0) but it's faster
+    on some machines.
 
     Arguments:
         frames: np.array of shape (N, H, W) containing N images.
@@ -28,12 +29,14 @@ def pixel_wise_std(frames, std_buffer):
 
 class FrequencyDetector:
     def __init__(self, buffer_size=32, width=160, height=120, fps=100,
-                 freq_min=12, freq_max=14, num_base_functions=3, num_shifts=4):
+                 freq_min=12, freq_max=14, num_base_functions=3, num_shifts=4,
+                 use_numba_std=False):
         self.buffer_size = buffer_size
         self.width = width
         self.height = height 
         self.fps = fps
         self.buffer_time = (1 / fps) * buffer_size
+        self.use_numba_std = use_numba_std
         
         self.responses = np.zeros((buffer_size, num_base_functions, num_shifts, height, width), dtype=np.float32)
         self.activity = np.zeros((num_base_functions, num_shifts, height, width), dtype=np.float32)
@@ -65,7 +68,10 @@ class FrequencyDetector:
 
         self.activity -= self.responses[self.buffer_idx]
         # Calculate the standard deviation of every pixel in the difference buffers.
-        pixel_wise_std(self.frame_diffs, self.frame_diffs_std)
+        if self.use_numba_std:
+            pixel_wise_std(self.frame_diffs, self.frame_diffs_std)
+        else:
+            self.frame_diffs_std = np.std(self.frame_diffs, axis=0) 
         # Now, the following assertion holds true:
         # assert np.allclose(self.frame_diffs_std, self.frame_diffs.std(axis=0))
         # Calculate the normalized correlation between the base functions and the images.
