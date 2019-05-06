@@ -176,9 +176,10 @@ class Flea3Capture(Camera):
 
         return True, im
 
-def cam_generator(cam_object, *args, **kwargs):
+def cam_generator(cam_object, warmup=True, *args, **kwargs):
     cam = cam_object(*args, **kwargs)
-    cam.warmup()
+    if warmup:
+        cam.warmup()
 
     while True:
         ret, frame, frame_orig = cam.get_frame()
