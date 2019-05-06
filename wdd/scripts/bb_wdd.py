@@ -30,8 +30,9 @@ def show_default_option(*args, **kwargs):
 @click.option('--cam_identifier', required=True, help='Identifier of camera (used in output storage path).')
 @click.option('--background_path', type=click.Path(exists=True), required=True, help='Where to load/store background image.')
 @show_default_option('--debug', default=False, help='Enable debug outputs/visualization')
+@show_default_option('--debug_frames', default=11, help='Only visualize every debug_frames frame in debug mode (can be slow if low)')
 def main(capture_type, video_device, height, width, fps, bee_length, binarization_threshold, max_frame_distance, 
-         min_num_detections, output_path, cam_identifier, background_path, debug):
+         min_num_detections, output_path, cam_identifier, background_path, debug, debug_frames):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
     binarization_threshold = np.expm1(binarization_threshold)
@@ -44,11 +45,17 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
         cam_obj = Flea3Capture
     else:
         raise RuntimeError('capture_type must be either OpenCV or PyCapture2')
+
+    frame_generator = cam_generator(cam_obj, warmup=False, width=width, height=height, fps=fps, device=video_device,
+                                    background=None, fullframe_path=None)
+    _, _, frame_orig, _ = next(frame_generator)
     
     full_frame_buffer_roi_size = bee_length * 10
     pad_size = full_frame_buffer_roi_size // 2
     full_frame_buffer_len = 100
-    full_frame_buffer = np.zeros((full_frame_buffer_len, 360 + 2 * pad_size, 683 + 2 * pad_size), dtype=np.uint8)
+    full_frame_buffer = np.zeros((full_frame_buffer_len, frame_orig.shape[0] + 2 * pad_size, frame_orig.shape[1] + 2 * pad_size), dtype=np.uint8)
+
+    frame_scale = frame_orig.shape[0] / height, frame_orig.shape[1] / width
 
     dd = FrequencyDetector(height=height, width=width, fps=fps)
     exporter = WaggleExporter(cam_id=cam_identifier, output_path=output_path, full_frame_buffer=full_frame_buffer,
@@ -69,9 +76,8 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
     if not os.path.exists(fullframe_path):
         os.mkdir(fullframe_path)
 
-    frame_generator = cam_generator(cam_obj, width=width, height=height, fps=fps, device=video_device,
-                                    background=background, fullframe_path=fullframe_path)
-
+    frame_generator = cam_generator(cam_obj, warmup=True, width=width, height=height, fps=fps, device=video_device,
+                                    background=None, fullframe_path=None)
 
     frame_idx = 0
     start_time = time.time()
@@ -97,14 +103,13 @@ def main(capture_type, video_device, height, width, fps, bee_length, binarizatio
                 print('\nSaving background image: {}'.format(background_file))
                 np.save(background_file, background)
             
-            # TODO Ben: Make relative to video size
-            if debug and frame_idx % 11 == 0:
+            if debug and frame_idx % debug_frames == 0:
                 current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
                 current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.current_waggles]
                 for blob_index, ((y, x), nd) in enumerate(zip(current_waggle_positions, current_waggle_num_detections)):
-                    cv2.circle(frame_orig, (int(x * 2), int(y * 2)), 10, (0, 0, 255), 2)
+                    cv2.circle(frame_orig, (int(x * frame_scale[0]), int(y * frame_scale[1])), 10, (0, 0, 255), 2)
                         
-                cv2.imshow('WDD', resize((frame_orig + 1) / 2, (360 * 2, 682 * 2)))
+                cv2.imshow('WDD', (((frame_orig + 1) / 2) * 255).astype(np.uint8))
                 cv2.waitKey(1)
             
             if frame_idx % 60 == 0:
