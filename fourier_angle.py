@@ -139,7 +139,7 @@ def calculate_angle_from_positions(positions):
     
     # Find a compromise between the two directions.
     compromise_direction = angle_modus_direction + total_direction
-    angle = -np.atan2(compromise_direction[1], compromise_direction[0])
+    angle = -np.arctan2(compromise_direction[1], compromise_direction[0])
     return angle
 
 def correct_angle_direction(main_angle, orientation_angle):    
