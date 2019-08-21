@@ -9,6 +9,7 @@
 
 import cv2
 import numpy as np
+import scipy.signal
 import scipy.stats
 
 def create_difference_images(images):
@@ -25,8 +26,8 @@ def create_difference_images(images):
     diff_images = np.diff(images, axis=0)
     assert diff_images.shape[0] == images.shape[0] - 1
     assert diff_images.shape[1] == images.shape[1]
-    diff_images = np.apply_along_axis(lambda m: np.convolve(m, smoothing_kernel, mode="same"),
-                                      axis=0, arr=diff_images)
+
+    diff_images = np.stack(list(map(lambda m: scipy.signal.convolve2d(m, smoothing_kernel, mode='same'), diff_images)))
     return diff_images
 
 def accumulate_fourier_transform(diff_images):
