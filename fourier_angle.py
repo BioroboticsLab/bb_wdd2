@@ -9,8 +9,10 @@
 
 import cv2
 import numpy as np
+import numba
 import scipy.signal
 import scipy.stats
+import skimage.filters
 
 def create_difference_images(images):
     """
@@ -113,34 +115,131 @@ def calculate_angle_from_filtered_fourier(filtered_fourier):
     angle = -np.arctan2(v[1][eigenvector_idx], v[0][eigenvector_idx])
     return angle
 
-def calculate_angle_from_positions(positions):
-    """Takes a tensor of positions and calculates a robust angle.
-    
+@numba.njit
+def largest_consecutive_region(a):
+    """Calculate the largest consecutive region of a boolean array.
+
     Arguments:
-        positions: np.array of shape (N, 2) containing rows of (x, y) coordinates ordered by time.
+        a: np.array
+            boolean type.
+
     Returns:
-        angle: Robust angle estimation of the movement.
+        begin, end: int
+            Inclusive begin and exclusive end index.
     """
-    # Make sure to disregard missing detections.
-    positions = positions[~np.any(positions == -1, axis=1), :]
-    assert np.all(positions != -1)
+    begin, end = None, None
+    max_length = None
+    current_begin = None
+    current_length = 0
     
-    n_half = positions.shape[0] // 2
-    average_starting_point = positions[:n_half, :].mean(axis=0)
-    # Calculate the mean of the different angles.
-    directions = positions[(n_half+1):, :] - average_starting_point
-    directional_angles = np.arctan2(directions[:, 0], directions[:, 1])
-    # I doubt this is sensible.
-    [n, c] = np.histogram(directional_angles, bins = 100)
-    angle_modus = scipy.stats.circmean(c[np.argwhere(n == np.amax(n))])
-    angle_modus_direction = np.array([np.cos(angle_modus), np.sin(angle_modus)])
+    for i in range(a.shape[0]+1):
+        active = a[i] if i < a.shape[0] else False
+        if active:
+            if current_begin is None:
+                current_begin = i
+            current_length += 1
+            continue
+        
+        if (current_begin is not None) and ((max_length is None) or (current_length > max_length)):
+            max_length = current_length
+            begin, end = current_begin, current_begin + current_length
+        current_length = 0
+        current_begin = None
+    return begin, end
+
+def get_correlation_with_frequency(images, hz, samplerate):
+    """Takes a 3D array of images (number, height, width) and calculates each pixels' activation with morlet wavelet corresponding to a certain frequency.
+
+    Arguments:
+        images: np.array shape number, height, width
+        hz: float
+            Frequency of the morlet wavelet.
+        samplerate: float
+            Samplerate of the original images.
     
-    # Calculate the total mean direction.
-    total_direction = positions[(n_half+1):, :].mean(axis=0) - average_starting_point
+    Returns:
+        correlations: np.array shape number, height, width
+    """
+    s, w = 0.5, 10.0
+    M = int(2*s*w*samplerate / hz)
+    wavelet = scipy.signal.morlet(M, w, s, complete=False)
     
-    # Find a compromise between the two directions.
-    compromise_direction = angle_modus_direction + total_direction
-    angle = -np.arctan2(compromise_direction[1], compromise_direction[0])
+    wavelet = wavelet.reshape(wavelet.shape[0], 1, 1)
+
+    corr = scipy.ndimage.convolve(images, wavelet)
+    corr2 = scipy.ndimage.convolve(images, -wavelet)
+    corr = np.stack((corr, corr2))
+    corr = np.max(corr, axis=0)
+    
+    return corr
+
+def estimate_waggle_begin_end(difference_images):
+    """Takes a set of first-order differences images of a 60hz recording and estimates the begin and end of a contained waggle run.
+    Also returns the regions of activity of the first and second half of the waggle..
+
+    Arguments:
+        difference_images: np.array shape n, height, width
+
+    Returns:
+        ((int, int), (np.array, np.array)) or ((None, None), None)
+    """
+    corr = get_correlation_with_frequency(difference_images, 12, samplerate=60) \
+            + get_correlation_with_frequency(difference_images, 15, samplerate=60)
+
+    activations = np.mean(corr, axis=(1, 2))
+    activations /= np.abs(difference_images).mean()
+    activations = scipy.ndimage.maximum_filter1d(activations, 10)
+    t = skimage.filters.threshold_otsu(activations)
+
+    t = 5.0 # 5% percentile of otsu thresholds of global population.
+    a = activations > t
+    begin, end = largest_consecutive_region(a)
+    if begin is None:
+        return (None, None), None
+    length = end - begin
+    first_half_location = np.mean(corr[begin:(begin+length//2)], axis=0) 
+    second_half_location = np.mean(corr[(end-length//2):end], axis=0)
+    return (begin, end), (first_half_location, second_half_location)
+
+def estimate_angle_from_moments(difference_images, waggle_regions):
+    """Takes an array of first-order difference images and a heatmap of likely waggle regions.
+    Calculates the centroids of the absolute differences for the first and last third of images weighted by the waggle regions.
+    The vector between these centroids defines the most likely angle of motion.
+
+    Arguments:
+        difference_images: np.array shape n, height, width
+        waggle_regions: tuple(np.array(height, width))
+
+    Returns:
+        angle: float
+        Can be np.nan.
+    """
+    length = difference_images.shape[0]
+    if length < 6:
+        return np.nan
+
+    points = np.zeros(shape=(2, 2))
+    N = length // 3
+    for idx in range(2):
+        if idx == 0:
+            diff_images = difference_images[0:N]
+        else:
+            diff_images = difference_images[(length-N):]
+        # Calculate the total motion activity in the image.
+        diff_images = np.sum(np.abs(diff_images), axis=0)
+        # And focus on the waggle region.
+        if waggle_regions is not None:
+            diff_images *= waggle_regions[idx]
+        # Make image moment concentrate more on the highest activity regions.
+        diff_images = np.power(diff_images, 5)
+        moments = cv2.moments(diff_images)
+        cx, cy = moments["m10"] / moments["m00"], moments["m01"] / moments["m00"]
+        points[idx, :] = (cx, cy)
+        
+    direction = points[1] - points[0]
+    # Image coordinate system is upside down.
+    angle = np.arctan2(-direction[1], direction[0])
+    
     return angle
 
 def correct_angle_direction(main_angle, orientation_angle):    
@@ -160,20 +259,25 @@ def correct_angle_direction(main_angle, orientation_angle):
         return main_angle - np.pi
     return main_angle
 
-def calculate_fourier_angle_from_waggle_run_images(positions, images):
+def calculate_fourier_angle_from_waggle_run_images(images):
     """Calculates the angle of a waggle-run using the fourier transform of the difference images of successive frames.
     
     Arguments:
-        positions: np.array of shape (N, 2) containing the x, y coordinates of the waggles.
         images: np.array of shape (N, W, H) containing the cropped images around a waggle dance.
     """
     difference_images = create_difference_images(images)
+    (waggle_begin, waggle_end), waggle_regions = estimate_waggle_begin_end(difference_images)
+    waggle_length = np.nan
+    if waggle_begin is not None:
+        difference_images = difference_images[waggle_begin:waggle_end]
+        waggle_length = waggle_end - waggle_begin
     fourier_sum = accumulate_fourier_transform(difference_images)
     filtered_fourier = filter_fft_with_kernel(fourier_sum)
     fourier_angle = calculate_angle_from_filtered_fourier(filtered_fourier)
     
-    positional_angle = calculate_angle_from_positions(positions)
-    
-    corrected_angle = correct_angle_direction(fourier_angle, positional_angle)
+    positional_angle = estimate_angle_from_moments(difference_images, waggle_regions)
+    corrected_angle = fourier_angle
+    if not np.isnan(positional_angle):
+        corrected_angle = correct_angle_direction(corrected_angle, positional_angle)
     corrected_angle = corrected_angle % (2*np.pi)
-    return corrected_angle
+    return corrected_angle, waggle_length
