@@ -103,7 +103,10 @@ class OpenCVCapture(Camera):
     def _get_frame(self):
         ret, frame_orig = self.cap.read()
         frame_orig = self.subsample_frame(frame_orig)
-        frame_orig = ((cv2.cvtColor(frame_orig, cv2.COLOR_BGR2GRAY) / 255) * 2) - 1
+        if frame_orig is not None:
+            frame_orig = frame_orig.astype(np.float32) / 255.0
+            frame_orig = np.mean(frame_orig, axis=2)
+            frame_orig = frame_orig * 2.0 - 1.0
         return ret, frame_orig
 
 
