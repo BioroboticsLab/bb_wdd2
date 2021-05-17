@@ -13,7 +13,7 @@ except ImportError:
 
 
 class Camera:
-    def __init__(self, height, width, background=None, no_background_updates=False, alpha=None):
+    def __init__(self, height, width, subsample=0, background=None, no_background_updates=False, alpha=None):
         self.background = background
         self.no_background_updates = no_background_updates
         if alpha is not None:
@@ -22,10 +22,16 @@ class Camera:
             self.alpha = 0.95
         self.height = height
         self.width = width
+        self.subsample = subsample
         self.counter = 0
 
     def _get_frame(self):
         raise NotImplementedError()
+    
+    def subsample_frame(self, frame):
+        if (frame is not None) and (self.subsample > 1):
+            frame = frame[::self.subsample, ::self.subsample]
+        return frame
 
     def get_frame(self):
         ret, frame_orig, timestamp = self._get_frame()
@@ -33,9 +39,8 @@ class Camera:
         if not ret:
             return ret, frame_orig, frame_orig, timestamp
 
-        # FIXME: temporary hack to speed up image aquisition using Flea3 in the BeesBook setup
-        # frame = resize(frame_orig, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
-        frame = frame_orig[::2, ::2]
+        if frame.shape[0] != self.height or frame.shape[1] != self.width:
+            frame = resize(frame_orig, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
 
         if not self.no_background_updates:
             if self.background is None:
@@ -85,9 +90,9 @@ class Camera:
 
 class OpenCVCapture(Camera):
     def __init__(
-        self, height, width, fps, device, background=None, no_background_updates=False, alpha=None, fullframe_path=None
+        self, height, width, fps, device, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None
     ):
-        super().__init__(height, width, background, alpha=alpha, no_background_updates=no_background_updates)
+        super().__init__(height, width, subsample=subsample, background=background, alpha=alpha, no_background_updates=no_background_updates)
 
         self.fps = fps
         self.cap = cv2.VideoCapture(device)
@@ -97,15 +102,16 @@ class OpenCVCapture(Camera):
 
     def _get_frame(self):
         ret, frame_orig = self.cap.read()
+        frame_orig = self.subsample_frame(frame_orig)
         frame_orig = ((cv2.cvtColor(frame_orig, cv2.COLOR_BGR2GRAY) / 255) * 2) - 1
         return ret, frame_orig
 
 
 class Flea3Capture(Camera):
     def __init__(
-        self, height, width, fps, device, background=None, no_background_updates=False, alpha=None, fullframe_path=None, gain=100
+        self, height, width, fps, device, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, gain=100
     ):
-        super().__init__(height, width, background, alpha=alpha, no_background_updates=no_background_updates)
+        super().__init__(height, width, subsample=subsample, background=background, alpha=alpha, no_background_updates=no_background_updates)
 
         self.fps = fps
         self.device = device
@@ -179,8 +185,8 @@ class Flea3Capture(Camera):
             imsave(fullframe_im_path, im)
 
         self.counter += 1
-
-        im = (im[::3, ::3].astype(np.float32) / 255) * 2 - 1
+        im = self.subsample_frame(im)
+        im = (im.astype(np.float32) / 255) * 2 - 1
 
         return True, im, timestamp
 

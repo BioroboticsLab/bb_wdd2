@@ -25,10 +25,11 @@ def show_default_option(*args, **kwargs):
 @click.option(
     "--video_device", required=True, help="OpenCV video device. Can be camera index or video path"
 )
-@show_default_option("--height", default=180, help="Video frame height in px")
-@show_default_option("--width", default=342, help="Video frame width in px")
+@show_default_option("--height", default=180, help="Video frame height in px (before subsampling).")
+@show_default_option("--width", default=342, help="Video frame width in px (before subsampling).")
+@click.option("--subsample", default=0, help="Fast subsampling by using every Xth pixel of the images.")
 @show_default_option("--fps", default=60, help="Frames per second")
-@show_default_option("--bee_length", default=7, help="Approximate length of a bee in px")
+@show_default_option("--bee_length", default=7, help="Approximate length of a bee in px (before subsampling).")
 @show_default_option(
     "--binarization_threshold",
     default=6.0,
@@ -70,6 +71,7 @@ def main(
     video_device,
     height,
     width,
+    subsample,
     fps,
     bee_length,
     binarization_threshold,
@@ -94,12 +96,19 @@ def main(
         cam_obj = Flea3Capture
     else:
         raise RuntimeError("capture_type must be either OpenCV or PyCapture2")
+    
+    subsample = int(subsample)
+    if subsample > 1:
+        height = height // subsample
+        width = width // subsample
+        max_distance = max_distance / subsample
 
     frame_generator = cam_generator(
         cam_obj,
         warmup=False,
         width=width,
         height=height,
+        subsample=subsample,
         fps=fps,
         device=video_device,
         background=None,
