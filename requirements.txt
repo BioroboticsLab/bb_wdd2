@@ -5,4 +5,3 @@ multiprocessing_generator>=0.2
 click>=6.7
 iso8601>=0.1.12
 imageio>=2.3.0
-numba>=0.39.0
