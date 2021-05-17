@@ -13,8 +13,9 @@ except ImportError:
 
 
 class Camera:
-    def __init__(self, height, width, background=None, alpha=None):
+    def __init__(self, height, width, background=None, no_background_updates=False, alpha=None):
         self.background = background
+        self.no_background_updates = no_background_updates
         if alpha is not None:
             self.alpha = alpha
         else:
@@ -36,11 +37,15 @@ class Camera:
         # frame = resize(frame_orig, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
         frame = frame_orig[::2, ::2]
 
-        # if self.background is None:
-        #    self.background = np.copy(frame)
-        # else:
-        #    if self.counter % 100 == 0:
-        #        self.background = self.alpha * self.background + (1 - self.alpha) * frame
+        if not self.no_background_updates:
+            if self.background is None:
+                self.background = np.copy(frame)
+            else:
+                if self.counter % 100 == 0:
+                    self.background = self.alpha * self.background + (1 - self.alpha) * frame
+        else:
+            if self.background is None:
+                raise RuntimeError("Background updates disabled but no existing background has been loaded.")
 
         self.counter += 1
 
@@ -80,9 +85,9 @@ class Camera:
 
 class OpenCVCapture(Camera):
     def __init__(
-        self, height, width, fps, device, background=None, alpha=None, fullframe_path=None
+        self, height, width, fps, device, background=None, no_background_updates=False, alpha=None, fullframe_path=None
     ):
-        super().__init__(height, width, background, alpha)
+        super().__init__(height, width, background, alpha=alpha, no_background_updates=no_background_updates)
 
         self.fps = fps
         self.cap = cv2.VideoCapture(device)
@@ -98,9 +103,9 @@ class OpenCVCapture(Camera):
 
 class Flea3Capture(Camera):
     def __init__(
-        self, height, width, fps, device, background=None, alpha=None, fullframe_path=None, gain=100
+        self, height, width, fps, device, background=None, no_background_updates=False, alpha=None, fullframe_path=None, gain=100
     ):
-        super().__init__(height, width, background, alpha)
+        super().__init__(height, width, background, alpha=alpha, no_background_updates=no_background_updates)
 
         self.fps = fps
         self.device = device

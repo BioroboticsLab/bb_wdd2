@@ -60,6 +60,11 @@ def show_default_option(*args, **kwargs):
     default=11,
     help="Only visualize every debug_frames frame in debug mode (can be slow if low)",
 )
+@click.option(
+    "--no_background_updates",
+    is_flag=True,
+    help="Do not update the background image. Can be used for additional performance if the background is static."
+)
 def main(
     capture_type,
     video_device,
@@ -75,6 +80,7 @@ def main(
     background_path,
     debug,
     debug_frames,
+    no_background_updates,
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -97,6 +103,7 @@ def main(
         fps=fps,
         device=video_device,
         background=None,
+        no_background_updates=no_background_updates,
         fullframe_path=None,
     )
     _, _, frame_orig, _ = next(frame_generator)
