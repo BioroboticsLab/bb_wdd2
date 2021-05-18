@@ -165,9 +165,11 @@ def main(
         warmup=True,
         width=width,
         height=height,
+        subsample=subsample,
         fps=fps,
         device=video_device,
         background=None,
+        no_background_updates=no_background_updates,
         fullframe_path=None,
     )
 
