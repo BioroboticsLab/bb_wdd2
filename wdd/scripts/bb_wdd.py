@@ -5,8 +5,6 @@ import sys
 import time
 import numpy as np
 
-from multiprocessing_generator import ParallelGenerator
-
 from wdd.camera import OpenCVCapture, Flea3Capture, cam_generator
 from wdd.processing import FrequencyDetector, WaggleDetector
 from wdd.export import WaggleExporter
@@ -66,6 +64,11 @@ def show_default_option(*args, **kwargs):
     is_flag=True,
     help="Do not update the background image. Can be used for additional performance if the background is static."
 )
+@click.option(
+    "--no_multiprocessing",
+    is_flag=True,
+    help="Do not use a multiprocessing queue to fetch the images."
+)
 def main(
     capture_type,
     video_device,
@@ -83,6 +86,7 @@ def main(
     debug,
     debug_frames,
     no_background_updates,
+    no_multiprocessing,
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -176,7 +180,19 @@ def main(
     frame_idx = 0
     start_time = time.time()
 
-    with ParallelGenerator(frame_generator, max_lookahead=fps) as gen:
+    generator_context = None
+    if not no_multiprocessing:
+        try:
+            from multiprocessing_generator import ParallelGenerator
+            generator_context = ParallelGenerator(frame_generator, max_lookahead=fps)
+        except Exception as e:
+            print("Failed to import and use multiprocessing_generator. Falling back to sequential reading. [Error: '{}']".format(str(e)))
+
+    if generator_context is None:
+        import contextlib
+        generator_context = contextlib.nullcontext(frame_generator)
+
+    with generator_context as gen:
         for ret, frame, frame_orig, background in gen:
             if frame_idx % 10000 == 0:
                 start_time = time.time()
