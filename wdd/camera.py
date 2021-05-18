@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 from datetime import datetime
-from imageio import imsave
+import imageio
 import time
 import os
 
@@ -51,6 +51,14 @@ class Camera:
         else:
             if self.background is None:
                 raise RuntimeError("Background updates disabled but no existing background has been loaded.")
+        
+        # store on full frame image every hour
+        if self.counter % (self.fps * 60 * 60) == 0:
+            fullframe_im_path = os.path.join(
+                self.fullframe_path, "{}-{}.png".format(self.device, datetime.utcnow())
+            )
+            print("\nStoring full frame image: {}".format(fullframe_im_path))
+            imageio.imsave(fullframe_im_path, frame_orig)
 
         self.counter += 1
 
@@ -119,7 +127,6 @@ class Flea3Capture(Camera):
         self.fps = fps
         self.device = device
         self.fullframe_path = fullframe_path
-        self.counter = 0
 
         bus = PyCapture2.BusManager()
         numCams = bus.getNumOfCameras()
@@ -179,15 +186,6 @@ class Flea3Capture(Camera):
         im = np.array(self.cap.retrieveBuffer())
         timestamp = datetime.utcnow().isoformat()
 
-        # store on full frame image every hour
-        if self.counter % (self.fps * 60 * 60) == 0:
-            fullframe_im_path = os.path.join(
-                self.fullframe_path, "{}-{}.png".format(self.device, datetime.utcnow())
-            )
-            print("\nStoring full frame image: {}".format(fullframe_im_path))
-            imsave(fullframe_im_path, im)
-
-        self.counter += 1
         im = self.subsample_frame(im)
         im = (im.astype(np.float32) / 255) * 2 - 1
 
