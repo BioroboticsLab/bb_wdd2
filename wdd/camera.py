@@ -110,6 +110,14 @@ class OpenCVCapture(Camera):
 
         self.fps = fps
         self.cap = cv2.VideoCapture(device)
+        if not self.cap.isOpened():
+            try:
+                # Maybe the user intended the argument as a device index.
+                self.cap = cv2.VideoCapture(int(device))
+            except:
+                pass
+            if not self.cap.isOpened():
+                raise RuntimeError("Could not open OpenCV device '{}'!".format(device))
         self.cap.set(cv2.CAP_PROP_FPS, fps)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
