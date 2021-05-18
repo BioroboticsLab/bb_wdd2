@@ -30,7 +30,7 @@ def pixel_wise_std(frames, std_buffer):
 class FrequencyDetector:
     def __init__(self, buffer_size=32, width=160, height=120, fps=100,
                  freq_min=12, freq_max=14, num_base_functions=3, num_shifts=4,
-                 use_numba_std=False):
+                 use_numba_std=False, running_stats_alpha=.8):
         self.buffer_size = buffer_size
         self.width = width
         self.height = height 
@@ -43,6 +43,10 @@ class FrequencyDetector:
         
         self.buffer = np.zeros((buffer_size, height, width), dtype=np.float32)
         self.buffer_idx = 0
+
+        self.running_mean = np.zeros((height, width), dtype=np.float32)
+        self.running_var = np.zeros((height, width), dtype=np.float32)
+        self.running_stats_alpha = running_stats_alpha
         
         self.frequencies = np.linspace(freq_min, freq_max + 1, num=num_base_functions)
         self.functions = [self._get_base_function(f, num_shifts) for f in self.frequencies]
@@ -64,14 +68,23 @@ class FrequencyDetector:
 
         frame_diff = self.buffer[None, None, self.buffer_idx, :, :] - \
             self.buffer[None, None, (self.buffer_idx-1) % self.buffer_size, :, :]
-        self.frame_diffs[(self.buffer_idx-1) % self.buffer_size, :, :] = frame_diff[0, 0, :, :]
+        #self.frame_diffs[(self.buffer_idx-1) % self.buffer_size, :, :] = frame_diff[0, 0, :, :]
+
+        # Exponential online variance: http://people.ds.cam.ac.uk/fanf2/hermes/doc/antiforgery/stats.pdf
+        running_var_diff = frame_diff[0, 0, :, :] - self.running_mean
+        running_var_incr = self.running_stats_alpha * running_var_diff
+        self.running_mean += running_var_incr
+        self.running_var = (1 - self.running_stats_alpha) * \
+            (self.running_var + running_var_diff * running_var_incr)
+
+        self.frame_diffs_std = np.sqrt(self.running_var)
 
         self.activity -= self.responses[self.buffer_idx]
         # Calculate the standard deviation of every pixel in the difference buffers.
-        if self.use_numba_std:
-            pixel_wise_std(self.frame_diffs, self.frame_diffs_std)
-        else:
-            self.frame_diffs_std = np.std(self.frame_diffs, axis=0) 
+        #if self.use_numba_std:
+        #    pixel_wise_std(self.frame_diffs, self.frame_diffs_std)
+        #else:
+        #    self.frame_diffs_std = np.std(self.frame_diffs, axis=0) 
         # Now, the following assertion holds true:
         # assert np.allclose(self.frame_diffs_std, self.frame_diffs.std(axis=0))
         # Calculate the normalized correlation between the base functions and the images.
