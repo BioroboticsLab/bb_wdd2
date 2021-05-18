@@ -33,6 +33,9 @@ class Camera:
             frame = frame[::self.subsample, ::self.subsample]
         return frame
 
+    def get_current_timestamp(self):
+        return datetime.utcnow().isoformat()
+
     def get_frame(self):
         ret, frame_orig, timestamp = self._get_frame()
 
@@ -110,12 +113,14 @@ class OpenCVCapture(Camera):
 
     def _get_frame(self):
         ret, frame_orig = self.cap.read()
+        timestamp = self.get_current_timestamp()
+
         frame_orig = self.subsample_frame(frame_orig)
         if frame_orig is not None:
             frame_orig = frame_orig.astype(np.float32) / 255.0
             frame_orig = np.mean(frame_orig, axis=2)
             frame_orig = frame_orig * 2.0 - 1.0
-        return ret, frame_orig
+        return ret, frame_orig, timestamp
 
 
 class Flea3Capture(Camera):
@@ -184,7 +189,7 @@ class Flea3Capture(Camera):
         # This requires a modified PyCapture2 with numpy bindings
         # https://github.com/GreenSlime96/PyCapture2_NumPy
         im = np.array(self.cap.retrieveBuffer())
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = self.get_current_timestamp()
 
         im = self.subsample_frame(im)
         im = (im.astype(np.float32) / 255) * 2 - 1
