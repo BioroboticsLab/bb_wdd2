@@ -4,7 +4,7 @@ import os
 from os.path import join
 from os import makedirs
 import json
-from skimage.io import imsave
+import imageio
 
 
 class WaggleExporter:
@@ -69,7 +69,7 @@ class WaggleExporter:
                 center_y - self.pad_size : center_y + self.pad_size,
             ]
             frame_timestamps.append(self.datetime_buffer[idx])
-            imsave(join(waggle_path, "{:03d}.png".format(im_idx)), roi)
+            imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), roi)
 
         json.dump(
             {

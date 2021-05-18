@@ -26,6 +26,9 @@ class Camera:
         self.counter = 0
 
     def _get_frame(self):
+        """
+        Function should return a float32 image in the range of [0, 1].
+        """
         raise NotImplementedError()
     
     def subsample_frame(self, frame):
@@ -61,7 +64,7 @@ class Camera:
                 self.fullframe_path, "{}-{}.png".format(self.device, datetime.utcnow())
             )
             print("\nStoring full frame image: {}".format(fullframe_im_path))
-            imageio.imsave(fullframe_im_path, frame_orig)
+            imageio.imwrite(fullframe_im_path, frame_orig)
 
         self.counter += 1
 
@@ -119,7 +122,6 @@ class OpenCVCapture(Camera):
         if frame_orig is not None:
             frame_orig = frame_orig.astype(np.float32) / 255.0
             frame_orig = np.mean(frame_orig, axis=2)
-            frame_orig = frame_orig * 2.0 - 1.0
         return ret, frame_orig, timestamp
 
 
@@ -192,7 +194,7 @@ class Flea3Capture(Camera):
         timestamp = self.get_current_timestamp()
 
         im = self.subsample_frame(im)
-        im = (im.astype(np.float32) / 255) * 2 - 1
+        im = im.astype(np.float32) / 255.0
 
         return True, im, timestamp
 

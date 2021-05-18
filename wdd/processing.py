@@ -67,6 +67,8 @@ class FrequencyDetector:
         return np.stack(sin_values).astype(np.float32)
 
     def process(self, frame, background):
+        frame = 2.0 * frame - 1.0
+        
         self.buffer[self.buffer_idx] = frame
 
         frame_diff = (

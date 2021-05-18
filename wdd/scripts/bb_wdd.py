@@ -126,7 +126,7 @@ def main(
             frame_orig.shape[0] + 2 * pad_size,
             frame_orig.shape[1] + 2 * pad_size,
         ),
-        dtype=np.uint8,
+        dtype=np.float32,
     )
 
     frame_scale = frame_orig.shape[0] / height, frame_orig.shape[1] / width
@@ -187,7 +187,7 @@ def main(
 
             full_frame_buffer[
                 frame_idx % full_frame_buffer_len, pad_size:-pad_size, pad_size:-pad_size
-            ] = (((frame_orig + 1) / 2) * 255).astype(np.uint8)
+            ] = frame_orig
 
             r = dd.process(frame, background)
             if r is not None:
@@ -212,7 +212,7 @@ def main(
                         2,
                     )
 
-                cv2.imshow("WDD", (((frame_orig + 1) / 2) * 255).astype(np.uint8))
+                cv2.imshow("WDD", (frame_orig * 255).astype(np.uint8))
                 cv2.waitKey(1)
 
             if frame_idx % 60 == 0:
