@@ -132,6 +132,7 @@ def main(
         ),
         dtype=np.float32,
     )
+    datetime_buffer = [datetime.datetime.min.isoformat() for _ in range(full_frame_buffer_len)]
 
     frame_scale = frame_orig.shape[0] / height, frame_orig.shape[1] / width
 
@@ -139,6 +140,7 @@ def main(
     exporter = WaggleExporter(
         cam_id=cam_identifier,
         output_path=output_path,
+        datetime_buffer=datetime_buffer,
         full_frame_buffer=full_frame_buffer,
         full_frame_buffer_len=full_frame_buffer_len,
         full_frame_buffer_roi_size=full_frame_buffer_roi_size,
@@ -149,6 +151,7 @@ def main(
         max_frame_distance=max_frame_distance,
         min_num_detections=min_num_detections,
         dilation_selem_radius=7,
+        datetime_buffer=datetime_buffer,
         exporter=exporter,
     )
 
@@ -193,7 +196,7 @@ def main(
         generator_context = contextlib.nullcontext(frame_generator)
 
     with generator_context as gen:
-        for ret, frame, frame_orig, background in gen:
+        for ret, frame, frame_orig, background, timestamp in gen:
             if frame_idx % 10000 == 0:
                 start_time = time.time()
 
@@ -204,6 +207,7 @@ def main(
             full_frame_buffer[
                 frame_idx % full_frame_buffer_len, pad_size:-pad_size, pad_size:-pad_size
             ] = frame_orig
+            datetime_buffer[frame_idx % full_frame_buffer_len] = timestamp
 
             r = dd.process(frame, background)
             if r is not None:
