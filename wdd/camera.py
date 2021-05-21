@@ -13,7 +13,7 @@ except ImportError:
 
 
 class Camera:
-    def __init__(self, height, width, subsample=0, background=None, no_background_updates=False, alpha=None):
+    def __init__(self, height, width, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, cam_identifier="cam"):
         self.background = background
         self.no_background_updates = no_background_updates
         if alpha is not None:
@@ -24,6 +24,8 @@ class Camera:
         self.width = width
         self.subsample = subsample
         self.counter = 0
+        self.fullframe_path = fullframe_path
+        self.cam_identifier = cam_identifier
 
     def _get_frame(self):
         """
@@ -45,9 +47,11 @@ class Camera:
         if not ret:
             return ret, frame_orig, frame_orig, timestamp
 
-        if frame.shape[0] != self.height or frame.shape[1] != self.width:
+        if frame_orig.shape[0] != self.height or frame_orig.shape[1] != self.width:
             frame = resize(frame_orig, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
-
+        else:
+            frame = frame_orig
+            
         if not self.no_background_updates:
             if self.background is None:
                 self.background = np.copy(frame)
@@ -59,12 +63,12 @@ class Camera:
                 raise RuntimeError("Background updates disabled but no existing background has been loaded.")
         
         # store on full frame image every hour
-        if self.counter % (self.fps * 60 * 60) == 0:
+        if self.fullframe_path and (self.counter % (self.fps * 60 * 60) == 0):
             fullframe_im_path = os.path.join(
-                self.fullframe_path, "{}-{}.png".format(self.device, datetime.utcnow())
+                self.fullframe_path, "{}-{}.png".format(self.cam_identifier, datetime.utcnow())
             )
             print("\nStoring full frame image: {}".format(fullframe_im_path))
-            imageio.imwrite(fullframe_im_path, frame_orig)
+            imageio.imwrite(fullframe_im_path, (frame_orig * 255.0).astype(np.uint8))
 
         self.counter += 1
 
@@ -104,9 +108,9 @@ class Camera:
 
 class OpenCVCapture(Camera):
     def __init__(
-        self, height, width, fps, device, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None
+        self, height, width, fps, device, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, cam_identifier=None
     ):
-        super().__init__(height, width, subsample=subsample, background=background, alpha=alpha, no_background_updates=no_background_updates)
+        super().__init__(height, width, subsample=subsample, background=background, alpha=alpha, no_background_updates=no_background_updates, fullframe_path=fullframe_path, cam_identifier=cam_identifier)
 
         self.fps = fps
         self.cap = cv2.VideoCapture(device)
@@ -135,13 +139,12 @@ class OpenCVCapture(Camera):
 
 class Flea3Capture(Camera):
     def __init__(
-        self, height, width, fps, device, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, gain=100
+        self, height, width, fps, device, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, gain=100, cam_identifier=None
     ):
-        super().__init__(height, width, subsample=subsample, background=background, alpha=alpha, no_background_updates=no_background_updates)
+        super().__init__(height, width, subsample=subsample, background=background, alpha=alpha, no_background_updates=no_background_updates, fullframe_path=fullframe_path, cam_identifier=cam_identifier)
 
         self.fps = fps
         self.device = device
-        self.fullframe_path = fullframe_path
 
         bus = PyCapture2.BusManager()
         numCams = bus.getNumOfCameras()
@@ -207,9 +210,10 @@ class Flea3Capture(Camera):
         return True, im, timestamp
 
 
-def cam_generator(cam_object, *args, **kwargs):
+def cam_generator(cam_object, warmup=True, *args, **kwargs):
     cam = cam_object(*args, **kwargs)
-    cam.warmup()
+    if warmup:
+        cam.warmup()
 
     while True:
         ret, frame, frame_orig, timestamp = cam.get_frame()

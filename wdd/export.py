@@ -69,7 +69,7 @@ class WaggleExporter:
                 center_y - self.pad_size : center_y + self.pad_size,
             ]
             frame_timestamps.append(self.datetime_buffer[idx])
-            imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), roi)
+            imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), (roi * 255.0).astype(np.uint8))
 
         json.dump(
             {

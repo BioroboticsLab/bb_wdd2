@@ -1,5 +1,6 @@
 import click
 import cv2
+import datetime
 import os
 import sys
 import time
@@ -118,8 +119,9 @@ def main(
         background=None,
         no_background_updates=no_background_updates,
         fullframe_path=None,
+        cam_identifier=cam_identifier,
     )
-    _, _, frame_orig, _ = next(frame_generator)
+    _, _, frame_orig, _, _ = next(frame_generator)
 
     full_frame_buffer_roi_size = bee_length * 10
     pad_size = full_frame_buffer_roi_size // 2
@@ -152,6 +154,7 @@ def main(
         min_num_detections=min_num_detections,
         dilation_selem_radius=7,
         datetime_buffer=datetime_buffer,
+        full_frame_buffer_len=full_frame_buffer_len,
         exporter=exporter,
     )
 
@@ -178,6 +181,7 @@ def main(
         background=None,
         no_background_updates=no_background_updates,
         fullframe_path=None,
+        cam_identifier=cam_identifier,
     )
 
     frame_idx = 0
@@ -214,7 +218,7 @@ def main(
                 activity, frame_diff = r
                 wd.process(frame_idx, activity)
 
-            if frame_idx % 10000 == 0:
+            if (frame_idx > 0) and (frame_idx % 10000 == 0):
                 print("\nSaving background image: {}".format(background_file))
                 np.save(background_file, background)
 
@@ -235,7 +239,7 @@ def main(
                 cv2.imshow("WDD", (frame_orig * 255).astype(np.uint8))
                 cv2.waitKey(1)
 
-            if frame_idx % 60 == 0:
+            if frame_idx % fps == 0:
                 end_time = time.time()
                 processing_fps = ((frame_idx % 10000) + 1) / (end_time - start_time)
                 sys.stdout.write(
@@ -246,7 +250,7 @@ def main(
                 sys.stdout.flush()
 
             frame_idx = frame_idx + 1
-
+    print("\nStopping.")
 
 if __name__ == "__main__":
     main()
