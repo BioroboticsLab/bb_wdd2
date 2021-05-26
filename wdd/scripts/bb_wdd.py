@@ -123,7 +123,6 @@ def main(
         fps=fps,
         device=video_device,
         background=None,
-        no_background_updates=no_background_updates,
         fullframe_path=None,
         cam_identifier=cam_identifier,
     )
@@ -184,7 +183,7 @@ def main(
         subsample=subsample,
         fps=fps,
         device=video_device,
-        background=None,
+        background=background,
         no_background_updates=no_background_updates,
         fullframe_path=None,
         cam_identifier=cam_identifier,
@@ -225,7 +224,7 @@ def main(
                 activity, frame_diff = r
                 wd.process(frame_idx, activity)
 
-            if (frame_idx > 0) and (frame_idx % 10000 == 0):
+            if (frame_idx > 0) and (frame_idx % 10000 == 0) and not no_background_updates:
                 print("\nSaving background image: {}".format(background_file))
                 np.save(background_file, background)
 
@@ -258,6 +257,10 @@ def main(
 
             frame_idx = frame_idx + 1
     print("\nStopping.")
+
+    if (frame_idx > 0) and not no_background_updates:
+        print("\nSaving background image: {}".format(background_file))
+        np.save(background_file, background)
 
 if __name__ == "__main__":
     main()
