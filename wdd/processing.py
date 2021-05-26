@@ -146,20 +146,27 @@ class WaggleDetector:
 
         frame_waggle_positions = []
         for blob_index in range(1, blobs_labels.max() + 1):
-            y, x = np.mean(np.argwhere(blobs_labels == blob_index), axis=0)
-            frame_waggle_positions.append((y, x))
+            waggle_area = blobs_labels == blob_index
+            y, x = np.mean(np.argwhere(waggle_area), axis=0)
+
+            waggle_response = np.max(activity[waggle_area])
+            frame_waggle_positions.append((y, x, waggle_response))
 
         return frame_waggle_positions
 
     def _assign_regions_to_waggles(self, frame_idx, frame_waggle_positions):
         if len(self.current_waggles) == 0 and len(frame_waggle_positions) > 0:
             for region_idx in range(len(frame_waggle_positions)):
+                waggle_info = frame_waggle_positions[region_idx]
                 waggle_timestamp = self.datetime_buffer[frame_idx % self.full_frame_buffer_len]
                 self.current_waggles.append(
                     Waggle(
                         timestamp=waggle_timestamp,
+                        xs=[waggle_info[1]],
+                        ys=[waggle_info[0]],
                         ts=[frame_idx],
                         camera_timestamps=[waggle_timestamp],
+                        responses=[waggle_info[2]],
                     )
                 )
             return
@@ -171,7 +178,7 @@ class WaggleDetector:
             # spatial and temporal distances of all activity regions to all
             # waggles currently being tracked
             assign_costs = scipy.spatial.distance.cdist(
-                current_waggle_positions, frame_waggle_positions
+                current_waggle_positions, [l[:2] for l in frame_waggle_positions]
             )
             time_dists = scipy.spatial.distance.cdist(
                 [[i] for i in current_waggle_frame_indices], [[frame_idx]]
@@ -198,14 +205,13 @@ class WaggleDetector:
                 ) <= self.max_frame_distance
 
                 if assign:
-                    self.current_waggles[waggle_idx].xs.append(
-                        frame_waggle_positions[region_idx][1]
-                    )
-                    self.current_waggles[waggle_idx].ys.append(
-                        frame_waggle_positions[region_idx][0]
-                    )
-                    self.current_waggles[waggle_idx].ts.append(frame_idx)
-                    self.current_waggles[waggle_idx].camera_timestamps.append(
+                    waggle_info = frame_waggle_positions[region_idx]
+                    existing_waggle = self.current_waggles[waggle_idx]
+                    existing_waggle.xs.append(waggle_info[1])
+                    existing_waggle.ys.append(waggle_info[0])
+                    existing_waggle.responses.append(waggle_info[2])
+                    existing_waggle.ts.append(frame_idx)
+                    existing_waggle.camera_timestamps.append(
                         self.datetime_buffer[frame_idx % self.full_frame_buffer_len]
                     )
 
@@ -214,11 +220,15 @@ class WaggleDetector:
             # unassigned activity regions become new tracked waggles
             for region_index in unassigned_fpws:
                 waggle_timestamp = self.datetime_buffer[frame_idx % self.full_frame_buffer_len]
+                waggle_info = frame_waggle_positions[region_index]
                 self.current_waggles.append(
                     Waggle(
                         timestamp=waggle_timestamp,
+                        xs=[waggle_info[1]],
+                        ys=[waggle_info[0]],
                         ts=[frame_idx],
                         camera_timestamps=[waggle_timestamp],
+                        responses=[waggle_info[2]],
                     )
                 )
 

@@ -17,6 +17,7 @@ class WaggleExporter:
         full_frame_buffer_roi_size,
         datetime_buffer,
         min_images=32,
+        subsampling_factor=None
     ):
         self.cam_id = cam_id
         self.output_path = output_path
@@ -26,6 +27,7 @@ class WaggleExporter:
         self.datetime_buffer = datetime_buffer
         self.pad_size = self.full_frame_buffer_roi_size // 2
         self.min_images = min_images
+        self.subsampling_factor = subsampling_factor
 
     def export(self, frame_idx, waggle):
         dt = waggle.timestamp
@@ -45,7 +47,7 @@ class WaggleExporter:
         makedirs(waggle_path, exist_ok=True)
 
         print(
-            "\n{} - {}: Saving new waggle: {}".format(self.cam_id, datetime.utcnow(), waggle_path)
+            "\r{} - {}: Saving new waggle: {}{}".format(self.cam_id, datetime.utcnow(), waggle_path, " " * 20)
         )
 
         frame_idx_offset = frame_idx - waggle.ts[0] - 20
@@ -55,30 +57,39 @@ class WaggleExporter:
         elif frame_idx_offset < self.min_images:
             frame_idx_offset = self.min_images
 
-        # FIXME: why are coordinates inverted at this point?
         # FIXME: scaling factor should depend on camera resolution
-        center_y = int(np.median(waggle.xs) * 2) + self.pad_size
-        center_x = int(np.median(waggle.ys) * 2) + self.pad_size
+        center_x = int(np.median(waggle.xs)) + self.pad_size
+        center_y = int(np.median(waggle.ys)) + self.pad_size
+
+        assert center_y < self.full_frame_buffer.shape[1]
+        assert center_x < self.full_frame_buffer.shape[2]
+
+        roi_x0, roi_x1 = max(0, center_x - self.pad_size), center_x + self.pad_size
+        roi_y0, roi_y1 = max(0, center_y - self.pad_size), center_y + self.pad_size
 
         frame_timestamps = []
         for im_idx, idx in enumerate(range(frame_idx - frame_idx_offset, frame_idx)):
             idx %= self.full_frame_buffer_len
             roi = self.full_frame_buffer[
                 idx,
-                center_x - self.pad_size : center_x + self.pad_size,
-                center_y - self.pad_size : center_y + self.pad_size,
+                roi_y0:roi_y1,
+                roi_x0:roi_x1,
             ]
             frame_timestamps.append(self.datetime_buffer[idx])
             imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), (roi * 255.0).astype(np.uint8))
 
         json.dump(
             {
+                "roi_coordinates": [[roi_x0 - self.pad_size, roi_y0 - self.pad_size], [roi_x1 - self.pad_size, roi_y1 - self.pad_size]],
+                "roi_center": [center_x - self.pad_size, center_y - self.pad_size],
                 "timestamp_begin": waggle.timestamp.isoformat(),
                 "x_coordinates": waggle.xs,
                 "y_coordinates": waggle.ys,
-                "frame_timestamps": frame_timestamps,
-                "camera_timestamps": waggle.camera_timestamps,
+                "responses": [float(r) for r in waggle.responses],
+                "frame_timestamps": [ts.isoformat() for ts in frame_timestamps],
+                "camera_timestamps": [ts.isoformat() for ts in waggle.camera_timestamps],
                 "frame_buffer_indices": [ts % self.full_frame_buffer_len for ts in waggle.ts],
+                "subsampling": self.subsampling_factor,
             },
             open(join(waggle_path, "waggle.json"), "w"),
         )

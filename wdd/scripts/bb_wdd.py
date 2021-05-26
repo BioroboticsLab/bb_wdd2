@@ -151,6 +151,7 @@ def main(
         full_frame_buffer=full_frame_buffer,
         full_frame_buffer_len=full_frame_buffer_len,
         full_frame_buffer_roi_size=full_frame_buffer_roi_size,
+        subsampling_factor=subsample
     )
     wd = WaggleDetector(
         max_distance=max_distance,
