@@ -1,7 +1,9 @@
 import numpy as np
 import cv2
-from datetime import datetime
+import datetime
+import pytz
 import imageio
+import skimage.transform
 import time
 import os
 
@@ -13,19 +15,29 @@ except ImportError:
 
 
 class Camera:
-    def __init__(self, height, width, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, cam_identifier="cam"):
+    def __init__(self, height, width, fps=None, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, cam_identifier="cam", start_timestamp=None):
         self.background = background
         self.no_background_updates = no_background_updates
         if alpha is not None:
             self.alpha = alpha
         else:
             self.alpha = 0.95
+        self.fps = fps
         self.height = height
         self.width = width
         self.subsample = subsample
         self.counter = 0
         self.fullframe_path = fullframe_path
         self.cam_identifier = cam_identifier
+
+        self.start_timestamp = None
+        if start_timestamp is not None:
+            try:
+                print(start_timestamp)
+                self.start_timestamp = datetime.datetime.fromisoformat(start_timestamp).astimezone(pytz.utc)
+                print("Auto-generating timestamps starting at {}.".format(self.start_timestamp.isoformat()))
+            except Exception as e:
+                raise ValueError("Invalid 'start_timestamp' argument: {}. Has to be iso-formatted.".format(str(e)))
 
     def _get_frame(self):
         """
@@ -39,7 +51,11 @@ class Camera:
         return frame
 
     def get_current_timestamp(self):
-        return datetime.utcnow().isoformat()
+        if self.start_timestamp is not None:
+            timestamp = self.start_timestamp + datetime.timedelta(seconds=(self.counter / self.fps))
+        else:
+            timestamp = datetime.datetime.utcnow()
+        return timestamp
 
     def get_frame(self):
         ret, frame_orig, timestamp = self._get_frame()
@@ -48,7 +64,7 @@ class Camera:
             return ret, frame_orig, frame_orig, timestamp
 
         if frame_orig.shape[0] != self.height or frame_orig.shape[1] != self.width:
-            frame = resize(frame_orig, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
+            frame = skimage.transform.resize(frame_orig, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
         else:
             frame = frame_orig
             
@@ -65,7 +81,7 @@ class Camera:
         # store on full frame image every hour
         if self.fullframe_path and (self.counter % (self.fps * 60 * 60) == 0):
             fullframe_im_path = os.path.join(
-                self.fullframe_path, "{}-{}.png".format(self.cam_identifier, datetime.utcnow())
+                self.fullframe_path, "{}-{}.png".format(self.cam_identifier, timestamp.isoformat())
             )
             print("\nStoring full frame image: {}".format(fullframe_im_path))
             imageio.imwrite(fullframe_im_path, (frame_orig * 255.0).astype(np.uint8))
@@ -108,11 +124,11 @@ class Camera:
 
 class OpenCVCapture(Camera):
     def __init__(
-        self, height, width, fps, device, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, cam_identifier=None
+        self, height, width, fps, device, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, cam_identifier=None, start_timestamp=None
     ):
-        super().__init__(height, width, subsample=subsample, background=background, alpha=alpha, no_background_updates=no_background_updates, fullframe_path=fullframe_path, cam_identifier=cam_identifier)
+        super().__init__(height, width, fps=fps, subsample=subsample, background=background,
+                            alpha=alpha, no_background_updates=no_background_updates, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp)
 
-        self.fps = fps
         self.cap = cv2.VideoCapture(device)
         if not self.cap.isOpened():
             try:
@@ -139,11 +155,11 @@ class OpenCVCapture(Camera):
 
 class Flea3Capture(Camera):
     def __init__(
-        self, height, width, fps, device, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, gain=100, cam_identifier=None
+        self, height, width, device, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None
     ):
-        super().__init__(height, width, subsample=subsample, background=background, alpha=alpha, no_background_updates=no_background_updates, fullframe_path=fullframe_path, cam_identifier=cam_identifier)
+        super().__init__(height, width, fps=fps, subsample=subsample, background=background,
+                            alpha=alpha, no_background_updates=no_background_updates, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp)
 
-        self.fps = fps
         self.device = device
 
         bus = PyCapture2.BusManager()

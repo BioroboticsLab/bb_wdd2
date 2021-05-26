@@ -70,6 +70,11 @@ def show_default_option(*args, **kwargs):
     is_flag=True,
     help="Do not use a multiprocessing queue to fetch the images."
 )
+@click.option(
+    "--start_timestamp",
+    default=None,
+    help="Instead of using the wall-clock, generate camera timestamps based on the FPS starting at this iso-formatted timestamp (example: '2019-08-30T12:30:05.000100+00:00')."
+)
 def main(
     capture_type,
     video_device,
@@ -88,6 +93,7 @@ def main(
     debug_frames,
     no_background_updates,
     no_multiprocessing,
+    start_timestamp,
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -182,6 +188,7 @@ def main(
         no_background_updates=no_background_updates,
         fullframe_path=None,
         cam_identifier=cam_identifier,
+        start_timestamp=start_timestamp,
     )
 
     frame_idx = 0
