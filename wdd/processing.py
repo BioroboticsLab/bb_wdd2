@@ -100,6 +100,7 @@ class WaggleDetector:
         max_frame_distance,
         min_num_detections,
         exporter,
+        opening_selem_radius,
         dilation_selem_radius,
         datetime_buffer,
         full_frame_buffer_len,
@@ -110,7 +111,7 @@ class WaggleDetector:
         self.max_frame_distance = max_frame_distance
         self.min_num_detections = min_num_detections
         self.exporter = exporter
-        self.default_selem = _default_selem(2).astype(np.uint8)
+        self.default_selem = _default_selem(opening_selem_radius).astype(np.uint8)
         self.selem = morphology.selem.disk(dilation_selem_radius)
         self.datetime_buffer = datetime_buffer
         self.full_frame_buffer_len = full_frame_buffer_len

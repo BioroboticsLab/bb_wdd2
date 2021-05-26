@@ -157,6 +157,7 @@ def main(
         binarization_threshold=binarization_threshold,
         max_frame_distance=max_frame_distance,
         min_num_detections=min_num_detections,
+        opening_selem_radius=2,
         dilation_selem_radius=7,
         datetime_buffer=datetime_buffer,
         full_frame_buffer_len=full_frame_buffer_len,
