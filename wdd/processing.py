@@ -1,6 +1,7 @@
 import cv2
 from datetime import datetime
 import numpy as np
+import opt_einsum
 import scipy
 import scipy.signal
 from scipy.optimize import linear_sum_assignment
@@ -12,8 +13,7 @@ from wdd.datastructures import Waggle
 
 import numba
 
-def apply_wavelets(wavelets, buffer, output, temp_buffer):
-    output[:] = 0
+def apply_wavelets(einsum_expression, wavelets, buffer, output, wavelet_results_buffer, temp_buffer):
 
     # Center buffer.
     np.mean(buffer, axis=0, out=temp_buffer)
@@ -24,10 +24,10 @@ def apply_wavelets(wavelets, buffer, output, temp_buffer):
     np.divide(buffer, temp_buffer, out=buffer)
     
     # Multiply wavelets to buffer, calculating the mean absolute response of the different wavelets.
-    for i in range(wavelets.shape[0]):
-        np.einsum("j,jkl->kl", wavelets[i], buffer, out=temp_buffer)
-        np.abs(temp_buffer, out=temp_buffer)
-        output += temp_buffer
+    einsum_expression(wavelets, buffer, out=wavelet_results_buffer)
+    
+    np.abs(wavelet_results_buffer, out=wavelet_results_buffer)
+    np.sum(wavelet_results_buffer, axis=0, out=output)
     output /= wavelets.shape[0]
 
 def _post_process_response(frame_response, fps, activity, activity_long, output_current_activity):
@@ -69,6 +69,9 @@ class FrequencyDetector:
         self.activity_decay = np.exp(np.log(0.05) / self.fps)
         self.activity_long_decay = np.exp(np.log(0.1) / self.fps)
 
+        self.einsum_expression = opt_einsum.contract_expression("ij,jkl->ikl", self.wavelets.shape, (self.wavelets.shape[1], height, width))
+        self.wavelet_results_buffer = np.zeros(shape=(self.wavelets.shape[0], height, width))
+
     def _get_wavelet(self, frequency):
         s, w = 0.5, 15.0
         M = int(2 * s * w * self.fps / frequency)
@@ -94,7 +97,7 @@ class FrequencyDetector:
         self.activity *= self.activity_decay
     
         current_buffer = self.buffer[(current_buffer_idx - self.max_wavelet_length + 1):(current_buffer_idx + 1)]
-        apply_wavelets(self.wavelets, current_buffer, self.frame_response, self.temp_buffer)
+        apply_wavelets(self.einsum_expression, self.wavelets, current_buffer, self.frame_response, self.wavelet_results_buffer, self.temp_buffer)
         _post_process_response(self.frame_response, self.fps, self.activity, self.activity_long, self.temp_buffer)
 
         self.temp_buffer[self.temp_buffer < 0.0] = 0.0
