@@ -48,22 +48,11 @@ def show_default_option(*args, **kwargs):
 @click.option(
     "--cam_identifier", required=True, help="Identifier of camera (used in output storage path)."
 )
-@click.option(
-    "--background_path",
-    type=click.Path(exists=True),
-    required=True,
-    help="Where to load/store background image.",
-)
 @show_default_option("--debug", is_flag=True, help="Enable debug outputs/visualization")
 @show_default_option(
     "--debug_frames",
     default=11,
     help="Only visualize every debug_frames frame in debug mode (can be slow if low)",
-)
-@click.option(
-    "--no_background_updates",
-    is_flag=True,
-    help="Do not update the background image. Can be used for additional performance if the background is static."
 )
 @click.option(
     "--no_multiprocessing",
@@ -93,10 +82,8 @@ def main(
     min_num_detections,
     output_path,
     cam_identifier,
-    background_path,
     debug,
     debug_frames,
-    no_background_updates,
     no_multiprocessing,
     no_warmup,
     start_timestamp,
@@ -128,11 +115,10 @@ def main(
         subsample=subsample,
         fps=fps,
         device=video_device,
-        background=None,
         fullframe_path=None,
         cam_identifier=cam_identifier,
     )
-    _, _, frame_orig, _, _ = next(frame_generator)
+    _, _, frame_orig, _ = next(frame_generator)
 
     full_frame_buffer_roi_size = bee_length * 10
     pad_size = full_frame_buffer_roi_size // 2
@@ -171,14 +157,6 @@ def main(
         exporter=exporter,
     )
 
-    background_file = os.path.join(background_path, "background_{}.npy".format(cam_identifier))
-    if os.path.exists(background_file):
-        background = np.load(background_file)
-        print("Loaded background image: {} (shape: {})".format(background_file, background.shape))
-    else:
-        print("No background image found for {}, starting from scratch".format(cam_identifier))
-        background = None
-
     fullframe_path = os.path.join(output_path, "fullframes")
     if not os.path.exists(fullframe_path):
         os.mkdir(fullframe_path)
@@ -191,8 +169,6 @@ def main(
         subsample=subsample,
         fps=fps,
         device=video_device,
-        background=background,
-        no_background_updates=no_background_updates,
         fullframe_path=None,
         cam_identifier=cam_identifier,
         start_timestamp=start_timestamp,
@@ -214,7 +190,7 @@ def main(
         generator_context = contextlib.nullcontext(frame_generator)
 
     with generator_context as gen:
-        for ret, frame, frame_orig, background, timestamp in gen:
+        for ret, frame, frame_orig, timestamp in gen:
             if frame_idx % 10000 == 0:
                 start_time = time.time()
 
@@ -227,13 +203,9 @@ def main(
             ] = frame_orig
             datetime_buffer[frame_idx % full_frame_buffer_len] = timestamp
 
-            activity = dd.process(frame, background)
+            activity = dd.process(frame)
             if activity is not None:
                 wd.process(frame_idx, activity)
-
-            if (frame_idx > 0) and (frame_idx % 10000 == 0) and not no_background_updates:
-                print("\nSaving background image: {}".format(background_file))
-                np.save(background_file, background)
 
             if debug and frame_idx % debug_frames == 0:
                 current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
@@ -271,10 +243,6 @@ def main(
 
             frame_idx = frame_idx + 1
     print("\nStopping.")
-
-    if (frame_idx > 0) and not no_background_updates:
-        print("\nSaving background image: {}".format(background_file))
-        np.save(background_file, background)
 
 if __name__ == "__main__":
     main()

@@ -79,7 +79,7 @@ class FrequencyDetector:
 
         return wavelet
 
-    def process(self, frame, background):
+    def process(self, frame):
         # Calculate rolling buffer index, so that the wavelets can always be multiplied
         # against a continuous buffer region.
         # I.e. sometimes write images at end AND beginning of buffer.

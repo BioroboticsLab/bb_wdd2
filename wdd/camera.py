@@ -15,13 +15,7 @@ except ImportError:
 
 
 class Camera:
-    def __init__(self, height, width, fps=None, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, cam_identifier="cam", start_timestamp=None):
-        self.background = background
-        self.no_background_updates = no_background_updates
-        if alpha is not None:
-            self.alpha = alpha
-        else:
-            self.alpha = 0.95
+    def __init__(self, height, width, fps=None, subsample=0, fullframe_path=None, cam_identifier="cam", start_timestamp=None):
         self.fps = fps
         self.height = height
         self.width = width
@@ -68,16 +62,6 @@ class Camera:
         else:
             frame = frame_orig
             
-        if not self.no_background_updates:
-            if self.background is None:
-                self.background = np.copy(frame)
-            else:
-                if self.counter % 100 == 0:
-                    self.background = self.alpha * self.background + (1 - self.alpha) * frame
-        else:
-            if self.background is None:
-                raise RuntimeError("Background updates disabled but no existing background has been loaded.")
-        
         # store on full frame image every hour
         if self.fullframe_path and (self.counter % (self.fps * 60 * 60) == 0):
             fullframe_im_path = os.path.join(
@@ -124,10 +108,9 @@ class Camera:
 
 class OpenCVCapture(Camera):
     def __init__(
-        self, height, width, fps, device, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, cam_identifier=None, start_timestamp=None
+        self, height, width, fps, device, subsample=0, fullframe_path=None, cam_identifier=None, start_timestamp=None
     ):
-        super().__init__(height, width, fps=fps, subsample=subsample, background=background,
-                            alpha=alpha, no_background_updates=no_background_updates, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp)
+        super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp)
 
         self.cap = cv2.VideoCapture(device)
         if not self.cap.isOpened():
@@ -155,10 +138,9 @@ class OpenCVCapture(Camera):
 
 class Flea3Capture(Camera):
     def __init__(
-        self, height, width, device, subsample=0, background=None, no_background_updates=False, alpha=None, fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None
+        self, height, width, device, subsample=0,  fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None
     ):
-        super().__init__(height, width, fps=fps, subsample=subsample, background=background,
-                            alpha=alpha, no_background_updates=no_background_updates, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp)
+        super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp)
 
         self.device = device
 
@@ -235,4 +217,4 @@ def cam_generator(cam_object, warmup=True, *args, **kwargs):
         ret, frame, frame_orig, timestamp = cam.get_frame()
         if not ret:
             break
-        yield ret, frame, frame_orig, cam.background, timestamp
+        yield ret, frame, frame_orig, timestamp
