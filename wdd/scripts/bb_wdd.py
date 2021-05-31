@@ -54,7 +54,7 @@ def show_default_option(*args, **kwargs):
     required=True,
     help="Where to load/store background image.",
 )
-@show_default_option("--debug", default=False, help="Enable debug outputs/visualization")
+@show_default_option("--debug", is_flag=True, help="Enable debug outputs/visualization")
 @show_default_option(
     "--debug_frames",
     default=11,
@@ -69,6 +69,11 @@ def show_default_option(*args, **kwargs):
     "--no_multiprocessing",
     is_flag=True,
     help="Do not use a multiprocessing queue to fetch the images."
+)
+@click.option(
+    "--no_warmup",
+    is_flag=True,
+    help="Do not warm up the image retrieval.."
 )
 @click.option(
     "--start_timestamp",
@@ -93,6 +98,7 @@ def main(
     debug_frames,
     no_background_updates,
     no_multiprocessing,
+    no_warmup,
     start_timestamp,
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
@@ -167,8 +173,8 @@ def main(
 
     background_file = os.path.join(background_path, "background_{}.npy".format(cam_identifier))
     if os.path.exists(background_file):
-        print("Loading background image: {}".format(background_file))
         background = np.load(background_file)
+        print("Loaded background image: {} (shape: {})".format(background_file, background.shape))
     else:
         print("No background image found for {}, starting from scratch".format(cam_identifier))
         background = None
@@ -179,7 +185,7 @@ def main(
 
     frame_generator = cam_generator(
         cam_obj,
-        warmup=True,
+        warmup=not no_warmup,
         width=width,
         height=height,
         subsample=subsample,
@@ -221,9 +227,8 @@ def main(
             ] = frame_orig
             datetime_buffer[frame_idx % full_frame_buffer_len] = timestamp
 
-            r = dd.process(frame, background)
-            if r is not None:
-                activity, frame_diff = r
+            activity = dd.process(frame, background)
+            if activity is not None:
                 wd.process(frame_idx, activity)
 
             if (frame_idx > 0) and (frame_idx % 10000 == 0) and not no_background_updates:
@@ -244,10 +249,17 @@ def main(
                         2,
                     )
 
-                cv2.imshow("WDD", (frame_orig * 255).astype(np.uint8))
+                im = (frame_orig * 255).astype(np.uint8)
+                im = np.repeat(im[:, :, None], 3, axis=2)
+                activity_im = (activity - activity.min())
+                activity_im /= activity_im.max()
+                activity_im = (activity_im * 255.0).astype(np.uint8)
+                activity_im = cv2.applyColorMap(activity_im, cv2.COLORMAP_VIRIDIS)
+                im = cv2.addWeighted(im, 0.25, activity_im, 0.75, 0)
+                cv2.imshow("WDD", im)
                 cv2.waitKey(1)
 
-            if frame_idx % fps == 0:
+            if frame_idx > 0 and (frame_idx % fps == 0):
                 end_time = time.time()
                 processing_fps = ((frame_idx % 10000) + 1) / (end_time - start_time)
                 sys.stdout.write(

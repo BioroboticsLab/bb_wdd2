@@ -2,6 +2,7 @@ import cv2
 from datetime import datetime
 import numpy as np
 import scipy
+import scipy.signal
 from scipy.optimize import linear_sum_assignment
 from skimage import morphology
 from skimage import measure
@@ -11,85 +12,90 @@ from wdd.datastructures import Waggle
 
 import numba
 
+def apply_wavelets(wavelets, buffer, output):
+    buffer = buffer[-wavelets.shape[1]:]
 
-@numba.jit(nopython=True, parallel=True)
-def parallel_std(b_all, std_temp):
-    for y in numba.prange(std_temp.shape[0]):
-        for x in numba.prange(std_temp.shape[1]):
-            std_temp[y, x] = np.std(b_all[:, y, x])
+    mean_buffer = np.mean(buffer, axis=0)
+    buffer = buffer - mean_buffer
+    
+    buff_std = np.abs(buffer)
+    buff_std = np.max(buff_std, axis=0)
+    buffer = buffer / (buff_std + 1e-5)
 
-
+    tmp = np.zeros(shape=buffer.shape[1:])
+    for i in range(wavelets.shape[0]):
+        np.einsum("j,jkl->kl", wavelets[i], buffer, out=tmp)
+        output += np.abs(tmp)
+    output /= wavelets.shape[0]
+    
 class FrequencyDetector:
     def __init__(
         self,
-        buffer_size=32,
         width=160,
         height=120,
         fps=100,
         freq_min=12,
-        freq_max=14,
-        num_base_functions=3,
-        num_shifts=4,
+        freq_max=15,
+        num_base_functions=4,
     ):
-        self.buffer_size = buffer_size
+        self.buffer_size = int(2.0 * fps)
         self.width = width
         self.height = height
         self.fps = fps
-        self.buffer_time = (1 / fps) * buffer_size
+        self.buffer_time = (1 / fps) * self.buffer_size
 
-        self.responses = np.zeros(
-            (buffer_size, num_base_functions, num_shifts, height, width), dtype=np.float32
-        )
-        self.activity = np.zeros((num_base_functions, num_shifts, height, width), dtype=np.float32)
+        self.activity_long = np.zeros((height, width), dtype=np.float32)
+        self.activity = np.zeros((height, width), dtype=np.float32)
 
-        self.buffer = np.zeros((buffer_size, height, width), dtype=np.float32)
+        self.buffer = np.zeros((self.buffer_size, height, width), dtype=np.float32)
         self.buffer_idx = 0
 
         self.frequencies = np.linspace(freq_min, freq_max + 1, num=num_base_functions)
-        self.functions = [self._get_base_function(f, num_shifts) for f in self.frequencies]
-        self.functions = np.stack(self.functions, axis=0)[:, :, :, None, None]
 
-        self.function_std = np.std(self.functions, axis=2)
+        self.wavelets = [self._get_wavelet(f) for f in self.frequencies]
+        self.max_wavelet_length = max([w.shape[0] for w in self.wavelets])
+        self.wavelets = np.stack([np.pad(w, (self.max_wavelet_length - w.shape[0], 0)) for w in self.wavelets])
 
-        self.alpha = 0.5
-        self.frame_diffs = np.zeros((buffer_size, height, width), dtype=np.float32)
-        self.std_temp = np.zeros(shape=(height, width), dtype=np.float32)
+        self.frame_response = np.zeros(shape=(height, width), dtype=np.float32)
 
-    def _get_base_function(self, frequency, num_shifts=2):
-        values = (
-            np.linspace(0, (self.buffer_size / self.fps) * 2 * np.pi, num=self.buffer_size)
-            * frequency
-        )
-        sin_values = [
-            np.sin(values + factor * (2 * np.pi) / num_shifts * 2 * np.pi)
-            for factor in range(num_shifts)
-        ]
-        return np.stack(sin_values).astype(np.float32)
+    def _get_wavelet(self, frequency):
+        s, w = 0.5, 15.0
+        M = int(2 * s * w * self.fps / frequency)
+        wavelet = scipy.signal.morlet(M, w, s, complete=False)
+        wavelet = wavelet[:wavelet.shape[0]//2]
+        wavelet = np.real(wavelet)
+        wavelet = wavelet.reshape(wavelet.shape[0])
+
+        return wavelet
 
     def process(self, frame, background):
-        frame = 2.0 * frame - 1.0
+        # Calculate rolling buffer index, so that the wavelets can always be multiplied
+        # against a continuous buffer region.
+        # I.e. sometimes write images at end AND beginning of buffer.
+        current_buffer_idx = self.max_wavelet_length + self.buffer_idx - 1
+        self.buffer[current_buffer_idx] = frame
+        if (self.buffer_idx > (self.buffer_size - 2.0 * self.max_wavelet_length)):
+            idx = self.max_wavelet_length - (self.buffer_size - current_buffer_idx)
+            self.buffer[idx] = frame
+        # Decay background activity slower than 'current' activity.
+        # The activity of 1 s ago will still contribute 5% to the 'current' activity.
+        self.activity_long *= np.exp(np.log(0.1) / self.fps)
+        self.activity *= np.exp(np.log(0.05) / self.fps)
+    
+        current_buffer = self.buffer[:(current_buffer_idx+1)]
+        self.frame_response[:] = 0
+        apply_wavelets(self.wavelets, current_buffer, self.frame_response)
+        self.frame_response = self.frame_response ** 2.0
+        self.activity += self.frame_response
+        current_activity = self.activity - self.activity_long / self.fps
+        current_activity = np.clip((current_activity), 0.0, np.inf) ** 4.0
         
-        self.buffer[self.buffer_idx] = frame
-
-        frame_diff = (
-            self.buffer[None, None, self.buffer_idx, :, :]
-            - self.buffer[None, None, (self.buffer_idx - 1) % self.buffer_size, :, :]
-        )
-        self.frame_diffs[(self.buffer_idx - 1) % self.buffer_size, :, :] = frame_diff[0, 0, :, :]
-
-        self.activity -= self.responses[self.buffer_idx]
-
-        parallel_std(self.frame_diffs, self.std_temp)
-
-        self.responses[self.buffer_idx] = (
-            self.functions[:, :, self.buffer_idx, :, :] * frame_diff
-        ) / (self.function_std * self.std_temp + 1e-3)
-        self.activity += self.responses[self.buffer_idx]
+        self.activity_long += self.frame_response
 
         self.buffer_idx += 1
-        self.buffer_idx %= self.buffer_size
+        self.buffer_idx %= (self.buffer_size - self.max_wavelet_length)
 
-        return (self.activity ** 2).max(axis=(0, 1)), frame_diff
+        return current_activity
 
 
 class WaggleDetector:
@@ -139,8 +145,8 @@ class WaggleDetector:
         self.current_waggles = new_current_waggles
 
     def _get_activity_regions(self, activity):
-        blobs = (activity > self.binarization_threshold).astype(np.uint8)
-        blobs_morph = cv2.morphologyEx(blobs, cv2.MORPH_OPEN, self.default_selem)
+        blobs_morph = (activity > self.binarization_threshold).astype(np.uint8)
+        blobs_morph = cv2.morphologyEx(blobs_morph, cv2.MORPH_OPEN, self.default_selem)
         blobs_morph = cv2.dilate(blobs_morph, self.selem)
         blobs_labels = measure.label(blobs_morph, background=0)
 
