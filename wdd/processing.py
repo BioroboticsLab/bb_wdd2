@@ -12,22 +12,29 @@ from wdd.datastructures import Waggle
 
 import numba
 
-def apply_wavelets(wavelets, buffer, output):
-    buffer = buffer[-wavelets.shape[1]:]
+def apply_wavelets(wavelets, buffer, output, temp_buffer):
+    output[:] = 0
 
-    mean_buffer = np.mean(buffer, axis=0)
-    buffer = buffer - mean_buffer
+    # Center buffer.
+    np.mean(buffer, axis=0, out=temp_buffer)
+    buffer = buffer - temp_buffer
+    # Normalize buffer so that max == 1.0 or -1.0.
+    np.max(np.abs(buffer), axis=0, out=temp_buffer)
+    temp_buffer += 1e-5
+    np.divide(buffer, temp_buffer, out=buffer)
     
-    buff_std = np.abs(buffer)
-    buff_std = np.max(buff_std, axis=0)
-    buffer = buffer / (buff_std + 1e-5)
-
-    tmp = np.zeros(shape=buffer.shape[1:])
+    # Multiply wavelets to buffer, calculating the mean absolute response of the different wavelets.
     for i in range(wavelets.shape[0]):
-        np.einsum("j,jkl->kl", wavelets[i], buffer, out=tmp)
-        output += np.abs(tmp)
+        np.einsum("j,jkl->kl", wavelets[i], buffer, out=temp_buffer)
+        np.abs(temp_buffer, out=temp_buffer)
+        output += temp_buffer
     output /= wavelets.shape[0]
-    
+
+def _post_process_response(frame_response, fps, activity, activity_long, output_current_activity):
+    frame_response = np.power(frame_response, 2.0, out=frame_response)
+    activity += frame_response
+    output_current_activity[:] = activity - activity_long / fps
+    activity_long += frame_response
 class FrequencyDetector:
     def __init__(
         self,
@@ -57,13 +64,17 @@ class FrequencyDetector:
         self.wavelets = np.stack([np.pad(w, (self.max_wavelet_length - w.shape[0], 0)) for w in self.wavelets])
 
         self.frame_response = np.zeros(shape=(height, width), dtype=np.float32)
+        self.temp_buffer = np.zeros(shape=(height, width), dtype=np.float32)
+
+        self.activity_decay = np.exp(np.log(0.05) / self.fps)
+        self.activity_long_decay = np.exp(np.log(0.1) / self.fps)
 
     def _get_wavelet(self, frequency):
         s, w = 0.5, 15.0
         M = int(2 * s * w * self.fps / frequency)
         wavelet = scipy.signal.morlet(M, w, s, complete=False)
         wavelet = wavelet[:wavelet.shape[0]//2]
-        wavelet = np.real(wavelet)
+        wavelet = np.real(wavelet).astype(np.float32)
         wavelet = wavelet.reshape(wavelet.shape[0])
 
         return wavelet
@@ -79,18 +90,18 @@ class FrequencyDetector:
             self.buffer[idx] = frame
         # Decay background activity slower than 'current' activity.
         # The activity of 1 s ago will still contribute 5% to the 'current' activity.
-        self.activity_long *= np.exp(np.log(0.1) / self.fps)
-        self.activity *= np.exp(np.log(0.05) / self.fps)
+        self.activity_long *= self.activity_long_decay
+        self.activity *= self.activity_decay
     
-        current_buffer = self.buffer[:(current_buffer_idx+1)]
-        self.frame_response[:] = 0
-        apply_wavelets(self.wavelets, current_buffer, self.frame_response)
-        self.frame_response = self.frame_response ** 2.0
-        self.activity += self.frame_response
-        current_activity = self.activity - self.activity_long / self.fps
-        current_activity = np.clip((current_activity), 0.0, np.inf) ** 4.0
-        
-        self.activity_long += self.frame_response
+        current_buffer = self.buffer[(current_buffer_idx - self.max_wavelet_length + 1):(current_buffer_idx + 1)]
+        apply_wavelets(self.wavelets, current_buffer, self.frame_response, self.temp_buffer)
+        _post_process_response(self.frame_response, self.fps, self.activity, self.activity_long, self.temp_buffer)
+
+        self.temp_buffer[self.temp_buffer < 0.0] = 0.0
+        self.temp_buffer = np.clip(self.temp_buffer, 0.0, np.inf)
+        np.power(self.temp_buffer, 4.0, out=self.temp_buffer)
+
+        current_activity = self.temp_buffer
 
         self.buffer_idx += 1
         self.buffer_idx %= (self.buffer_size - self.max_wavelet_length)
