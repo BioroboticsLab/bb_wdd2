@@ -1,6 +1,7 @@
 import cv2
 from datetime import datetime
 import numpy as np
+import numexpr as ne
 import opt_einsum
 import scipy
 import scipy.signal
@@ -13,27 +14,28 @@ from wdd.datastructures import Waggle
 
 import numba
 
-def apply_wavelets(einsum_expression, wavelets, buffer, output, wavelet_results_buffer, temp_buffer):
+def apply_wavelets(einsum_expression, wavelets, buffer, output, temp_full_buffer, temp_normalization_buffer, wavelet_results_buffer, temp_one_frame_buffer):
 
-    # Center buffer.
-    np.mean(buffer, axis=0, out=temp_buffer)
-    buffer = buffer - temp_buffer
-    # Normalize buffer so that max == 1.0 or -1.0.
-    np.max(np.abs(buffer), axis=0, out=temp_buffer)
-    temp_buffer += 1e-5
-    np.divide(buffer, temp_buffer, out=buffer)
-    
+    buffer_size = np.float32(buffer.shape[0])
+    n_wavelets = np.float32(wavelets.shape[0])
+    eps = np.float32(1e-5)
+
+    ne.evaluate("sum(buffer, axis=0)", out=temp_one_frame_buffer)
+    ne.evaluate("buffer - (temp_one_frame_buffer / buffer_size)", out=temp_full_buffer)
+    ne.evaluate("abs(temp_full_buffer)", out=temp_normalization_buffer)
+    temp_normalization_buffer.max(axis=0, out=temp_one_frame_buffer)
+    ne.evaluate("temp_full_buffer / (temp_one_frame_buffer + eps)", out=temp_full_buffer)
+
     # Multiply wavelets to buffer, calculating the mean absolute response of the different wavelets.
-    einsum_expression(wavelets, buffer, out=wavelet_results_buffer)
-    
-    np.abs(wavelet_results_buffer, out=wavelet_results_buffer)
-    np.sum(wavelet_results_buffer, axis=0, out=output)
-    output /= wavelets.shape[0]
+    einsum_expression(wavelets, temp_full_buffer, out=wavelet_results_buffer)
+    # If -1 * signal would have a max response with the wavelet, we consider it to be equal.
+    ne.evaluate("sum(abs(wavelet_results_buffer), axis=0)", out=temp_one_frame_buffer)
+    ne.evaluate("temp_one_frame_buffer / n_wavelets", out=output)
 
 def _post_process_response(frame_response, fps, activity, activity_long, output_current_activity):
-    frame_response = np.power(frame_response, 2.0, out=frame_response)
+    ne.evaluate("frame_response ** 2.0", out=frame_response)
     activity += frame_response
-    output_current_activity[:] = activity - activity_long / fps
+    ne.evaluate("activity - (activity_long / fps)", out=output_current_activity)
     activity_long += frame_response
 class FrequencyDetector:
     def __init__(
@@ -48,7 +50,7 @@ class FrequencyDetector:
         self.buffer_size = int(2.0 * fps)
         self.width = width
         self.height = height
-        self.fps = fps
+        self.fps = np.float32(fps)
         self.buffer_time = (1 / fps) * self.buffer_size
 
         self.activity_long = np.zeros((height, width), dtype=np.float32)
@@ -64,13 +66,16 @@ class FrequencyDetector:
         self.wavelets = np.stack([np.pad(w, (self.max_wavelet_length - w.shape[0], 0)) for w in self.wavelets])
 
         self.frame_response = np.zeros(shape=(height, width), dtype=np.float32)
-        self.temp_buffer = np.zeros(shape=(height, width), dtype=np.float32)
 
         self.activity_decay = np.exp(np.log(0.05) / self.fps)
         self.activity_long_decay = np.exp(np.log(0.1) / self.fps)
 
         self.einsum_expression = opt_einsum.contract_expression("ij,jkl->ikl", self.wavelets.shape, (self.wavelets.shape[1], height, width))
-        self.wavelet_results_buffer = np.zeros(shape=(self.wavelets.shape[0], height, width))
+        self.wavelet_results_buffer = np.zeros(shape=(self.wavelets.shape[0], height, width), dtype=np.float32)
+
+        self.temp_full_buffer = np.zeros(shape=(self.wavelets.shape[1], height, width), dtype=np.float32)
+        self.temp_normalization_buffer = np.zeros(shape=(self.wavelets.shape[1], height, width), dtype=np.float32)
+        self.temp_one_frame_buffer = np.zeros(shape=(height, width), dtype=np.float32)
 
     def _get_wavelet(self, frequency):
         s, w = 0.5, 15.0
@@ -97,14 +102,14 @@ class FrequencyDetector:
         self.activity *= self.activity_decay
     
         current_buffer = self.buffer[(current_buffer_idx - self.max_wavelet_length + 1):(current_buffer_idx + 1)]
-        apply_wavelets(self.einsum_expression, self.wavelets, current_buffer, self.frame_response, self.wavelet_results_buffer, self.temp_buffer)
-        _post_process_response(self.frame_response, self.fps, self.activity, self.activity_long, self.temp_buffer)
+        apply_wavelets(self.einsum_expression, self.wavelets, current_buffer, self.frame_response,
+                        self.temp_full_buffer, self.temp_normalization_buffer, self.wavelet_results_buffer, self.temp_one_frame_buffer)
+        _post_process_response(self.frame_response, self.fps, self.activity, self.activity_long, self.temp_one_frame_buffer)
 
-        self.temp_buffer[self.temp_buffer < 0.0] = 0.0
-        self.temp_buffer = np.clip(self.temp_buffer, 0.0, np.inf)
-        np.power(self.temp_buffer, 4.0, out=self.temp_buffer)
+        self.temp_one_frame_buffer[self.temp_one_frame_buffer < 0.0] = 0.0
+        np.power(self.temp_one_frame_buffer, 4.0, out=self.temp_one_frame_buffer)
 
-        current_activity = self.temp_buffer
+        current_activity = self.temp_one_frame_buffer
 
         self.buffer_idx += 1
         self.buffer_idx %= (self.buffer_size - self.max_wavelet_length)
