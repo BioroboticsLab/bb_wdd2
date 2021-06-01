@@ -125,14 +125,21 @@ class OpenCVCapture(Camera):
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
 
+        # Reuse the same allocated memory for a small speedup.
+        self.buffer_frame_rgb_float = None
+        self.capture_double_buffer = None
+
     def _get_frame(self):
-        ret, frame_orig = self.cap.read()
+        ret, self.capture_double_buffer = self.cap.read(self.capture_double_buffer)
         timestamp = self.get_current_timestamp()
 
-        frame_orig = self.subsample_frame(frame_orig)
+        frame_orig = self.subsample_frame(self.capture_double_buffer)
         if frame_orig is not None:
-            frame_orig = frame_orig.astype(np.float32) / 255.0
-            frame_orig = np.mean(frame_orig, axis=2)
+            if self.buffer_frame_rgb_float is None:
+                self.buffer_frame_rgb_float = np.zeros(shape=frame_orig.shape, dtype=np.float32)
+            self.buffer_frame_rgb_float[:] = frame_orig
+            self.buffer_frame_rgb_float /= 255.0
+            frame_orig = self.buffer_frame_rgb_float.mean(axis=2)
         return ret, frame_orig, timestamp
 
 
