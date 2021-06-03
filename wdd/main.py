@@ -29,6 +29,8 @@ def run_wdd(
     no_multiprocessing,
     no_warmup,
     start_timestamp,
+    verbose=True,
+    exporter_save_data_fn=None
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -86,7 +88,8 @@ def run_wdd(
         full_frame_buffer=full_frame_buffer,
         full_frame_buffer_len=full_frame_buffer_len,
         full_frame_buffer_roi_size=full_frame_buffer_roi_size,
-        subsampling_factor=subsample
+        subsampling_factor=subsample,
+        save_data_fn=exporter_save_data_fn
     )
     wd = WaggleDetector(
         max_distance=max_distance,
@@ -131,6 +134,8 @@ def run_wdd(
     if generator_context is None:
         import contextlib
         generator_context = contextlib.nullcontext(frame_generator)
+    
+    processing_fps = None
 
     with generator_context as gen:
         for ret, frame, frame_orig, timestamp in gen:
@@ -174,7 +179,7 @@ def run_wdd(
                 cv2.imshow("WDD", im)
                 cv2.waitKey(1)
 
-            if frame_idx > 0 and (frame_idx % fps == 0):
+            if frame_idx > 0 and (frame_idx % fps == 0) and verbose:
                 end_time = time.time()
                 processing_fps = ((frame_idx % 10000) + 1) / (end_time - start_time)
                 sys.stdout.write(
@@ -185,3 +190,5 @@ def run_wdd(
                 sys.stdout.flush()
 
             frame_idx = frame_idx + 1
+
+    return processing_fps

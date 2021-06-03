@@ -17,7 +17,8 @@ class WaggleExporter:
         full_frame_buffer_roi_size,
         datetime_buffer,
         min_images=32,
-        subsampling_factor=None
+        subsampling_factor=None,
+        save_data_fn=None
     ):
         self.cam_id = cam_id
         self.output_path = output_path
@@ -28,8 +29,12 @@ class WaggleExporter:
         self.pad_size = self.full_frame_buffer_roi_size // 2
         self.min_images = min_images
         self.subsampling_factor = subsampling_factor
+        # Allow overwriting the data export function (e.g. to calculate scores instead of saving).
+        self.save_data_fn = save_data_fn
+        if self.save_data_fn is None:
+            self.save_data_fn = self._save_data
 
-    def export(self, frame_idx, waggle):
+    def _save_data(self, waggle, full_frame_rois, metadata_dict):
         dt = waggle.timestamp
         y, m, d, h, mn = dt.year, dt.month, dt.day, dt.hour, dt.minute
         waggle_path = join(
@@ -50,6 +55,14 @@ class WaggleExporter:
             "\r{} - {}: Saving new waggle: {}{}".format(self.cam_id, datetime.utcnow(), waggle_path, " " * 20)
         )
 
+        for im_idx, roi in enumerate(full_frame_rois):
+            imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), roi)
+
+        with open(join(waggle_path, "waggle.json"), "w") as f:
+            json.dump(metadata_dict, f)
+
+    def export(self, frame_idx, waggle):
+        
         frame_idx_offset = frame_idx - waggle.ts[0] - 20
         if frame_idx_offset >= self.full_frame_buffer_len:
             frame_idx_offset = self.full_frame_buffer_len - 1
@@ -66,7 +79,8 @@ class WaggleExporter:
 
         roi_x0, roi_x1 = max(0, center_x - self.pad_size), center_x + self.pad_size
         roi_y0, roi_y1 = max(0, center_y - self.pad_size), center_y + self.pad_size
-
+        
+        all_rois = []
         frame_timestamps = []
         for im_idx, idx in enumerate(range(frame_idx - frame_idx_offset, frame_idx)):
             idx %= self.full_frame_buffer_len
@@ -76,10 +90,10 @@ class WaggleExporter:
                 roi_x0:roi_x1,
             ]
             frame_timestamps.append(self.datetime_buffer[idx])
-            imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), (roi * 255.0).astype(np.uint8))
+            all_rois.append((roi * 255.0).astype(np.uint8))
+            
 
-        json.dump(
-            {
+        metadata = {
                 "roi_coordinates": [[roi_x0 - self.pad_size, roi_y0 - self.pad_size], [roi_x1 - self.pad_size, roi_y1 - self.pad_size]],
                 "roi_center": [center_x - self.pad_size, center_y - self.pad_size],
                 "timestamp_begin": waggle.timestamp.isoformat(),
@@ -90,6 +104,7 @@ class WaggleExporter:
                 "camera_timestamps": [ts.isoformat() for ts in waggle.camera_timestamps],
                 "frame_buffer_indices": [ts % self.full_frame_buffer_len for ts in waggle.ts],
                 "subsampling": self.subsampling_factor,
-            },
-            open(join(waggle_path, "waggle.json"), "w"),
-        )
+            }
+
+        self.save_data_fn(waggle, all_rois, metadata)
+

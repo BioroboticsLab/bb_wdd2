@@ -27,12 +27,11 @@ class Camera:
         self.start_timestamp = None
         if start_timestamp is not None:
             try:
-                print(start_timestamp)
                 self.start_timestamp = datetime.datetime.fromisoformat(start_timestamp).astimezone(pytz.utc)
-                print("Auto-generating timestamps starting at {}.".format(self.start_timestamp.isoformat()))
             except Exception as e:
                 raise ValueError("Invalid 'start_timestamp' argument: {}. Has to be iso-formatted.".format(str(e)))
-
+        
+        self.resize_warning_emitted = False
     def _get_frame(self):
         """
         Function should return a float32 image in the range of [0, 1].
@@ -59,6 +58,10 @@ class Camera:
 
         if frame_orig.shape[0] != self.height or frame_orig.shape[1] != self.width:
             frame = skimage.transform.resize(frame_orig, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
+
+            if not self.resize_warning_emitted:
+                self.resize_warning_emitted = True
+                print("Warning! Necessary to resize the image after subsampling ({}) to fit into desired output shape ({}). This could be slow.".format(frame_orig.shape, frame.shape))
         else:
             frame = frame_orig
             

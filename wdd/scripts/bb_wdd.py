@@ -3,6 +3,8 @@ import datetime
 import os
 import sys
 import time
+import math
+import numpy as np
 
 from wdd.main import run_wdd
 
@@ -64,11 +66,64 @@ def show_default_option(*args, **kwargs):
     default=None,
     help="Instead of using the wall-clock, generate camera timestamps based on the FPS starting at this iso-formatted timestamp (example: '2019-08-30T12:30:05.000100+00:00')."
 )
+@click.option(
+    "--autoopt",
+    default="",
+    help="Automatically optimize hyperparameters given a CSV file with annotations."
+)
 def main(
+    bee_length,
+    autoopt,
     **kwargs
 ):
-    run_wdd(**kwargs)
-    print("\nStopping.")
+    if not autoopt:
+        run_wdd(bee_length=bee_length, **kwargs)
+        print("\nStopping.")
+    else:
+        print("Optimizing hyperparameters..")
+        import hyperopt
+        from hyperopt import hp
+        from wdd.evaluation import load_ground_truth, calculate_scores
+
+        ground_truth = load_ground_truth(autoopt)
+        
+        search_space = dict(
+            bee_length = hp.quniform("bee_length", bee_length * 0.8, bee_length * 1.2, q=1),
+            subsample = hp.choice("subsample", list(np.arange(
+                                                    int(math.log(bee_length, 2) / math.log(5, 2)),
+                                                    int(math.log(bee_length, 2))))),
+            binarization_threshold = hp.uniform("binarization_threshold", 2, 15),
+            max_frame_distance = hp.uniform("max_frame_distance", 0.1, 0.5),
+            min_num_detections = hp.uniform("min_num_detections", 0.05, 0.3),
+        )
+
+        def objective(fun_kwargs):
+            fun_kwargs = {**fun_kwargs, **kwargs}
+            fun_kwargs["no_warmup"] = True
+            fun_kwargs["verbose"] = False
+            fun_kwargs["bee_length"] = int(fun_kwargs["bee_length"])
+            fun_kwargs["subsample"] = int(fun_kwargs["subsample"])
+
+            all_waggles = []
+            def save_waggle(waggle, rois, metadata):
+                all_waggles.append(metadata)
+            fps = fun_kwargs["exporter_save_data_fn"] = save_waggle
+            run_wdd(**fun_kwargs)
+
+            results = calculate_scores(all_waggles, ground_truth, bee_length=bee_length)
+            results["fps"] = fps
+            results["loss"] = results["f_0.5"]
+            results["status"] = "ok"
+            return results
+
+        best = hyperopt.fmin(objective, search_space, algo=hyperopt.tpe.suggest, max_evals=10, show_progressbar=True)
+
+        print("Optimization finished!")
+        print("Best parameters:")
+        print(best)
+        print(hp.space_eval(best))
+
+
 
 if __name__ == "__main__":
     main()
