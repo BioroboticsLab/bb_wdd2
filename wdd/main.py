@@ -179,15 +179,16 @@ def run_wdd(
                 cv2.imshow("WDD", im)
                 cv2.waitKey(1)
 
-            if frame_idx > 0 and (frame_idx % fps == 0) and verbose:
+            if frame_idx > 0 and (frame_idx % fps == 0):
                 end_time = time.time()
                 processing_fps = ((frame_idx % 10000) + 1) / (end_time - start_time)
-                sys.stdout.write(
-                    "\rCurrently processing with FPS: {:.1f} | Max DD: {:.2f} | [{:16s} {}]".format(
-                        processing_fps, np.log1p(activity.max()), cam_identifier, video_device
+                if verbose:
+                    sys.stdout.write(
+                        "\rCurrently processing with FPS: {:.1f} | Max DD: {:.2f} | [{:16s} {}]".format(
+                            processing_fps, np.log1p(activity.max()), cam_identifier, video_device
+                        )
                     )
-                )
-                sys.stdout.flush()
+                    sys.stdout.flush()
 
             frame_idx = frame_idx + 1
 
