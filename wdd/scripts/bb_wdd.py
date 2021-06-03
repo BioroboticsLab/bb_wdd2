@@ -116,11 +116,13 @@ def main(
             results["status"] = hyperopt.STATUS_OK
             return results
 
-        best = hyperopt.fmin(objective, search_space, algo=hyperopt.tpe.suggest, max_evals=20, show_progressbar=True)
+        trials = hyperopt.Trials()
+        best = hyperopt.fmin(objective, search_space, algo=hyperopt.tpe.suggest, max_evals=20, show_progressbar=True, trials=trials)
 
         print("Optimization finished!")
         print("Best parameters:")
         print(hyperopt.space_eval(search_space, best))
+        print(trials.best_trial["result"])
 
 
 
