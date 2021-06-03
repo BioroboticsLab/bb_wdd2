@@ -30,10 +30,9 @@ def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length, verbose=T
         begin = row["camera_timestamps"][0]
         end = row["camera_timestamps"][-1]
         response = np.median(row["responses"])
-        scaling = row["subsampling"]
         
         waggles_df.append(dict(
-            x=x * scaling, y=y * scaling,
+            x=x, y=y,
             start=begin, end=end,
             length=(end - begin),
             length_s=(end - begin).total_seconds(),

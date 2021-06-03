@@ -4,6 +4,7 @@ import datetime
 import os
 import sys
 import time
+import math
 import numpy as np
 
 from wdd.camera import OpenCVCapture, Flea3Capture, cam_generator
@@ -29,6 +30,7 @@ def run_wdd(
     no_multiprocessing,
     no_warmup,
     start_timestamp,
+    roi,
     verbose=True,
     exporter_save_data_fn=None
 ):
@@ -45,13 +47,17 @@ def run_wdd(
         cam_obj = Flea3Capture
     else:
         raise RuntimeError("capture_type must be either OpenCV or PyCapture2")
-    
+
+    if roi is not None:
+        width = int(roi[2])
+        height = int(roi[3])
+
     subsample = int(subsample)
     if subsample > 1:
-        height = height // subsample
-        width = width // subsample
+        height = math.ceil(height / subsample)
+        width = math.ceil(width / subsample)
         max_distance = max(2, max_distance / subsample)
-    
+
     frame_generator = cam_generator(
         cam_obj,
         warmup=False,
@@ -62,6 +68,7 @@ def run_wdd(
         device=video_device,
         fullframe_path=None,
         cam_identifier=cam_identifier,
+        roi=roi
     )
     _, _, frame_orig, _ = next(frame_generator)
 
@@ -89,7 +96,8 @@ def run_wdd(
         full_frame_buffer_len=full_frame_buffer_len,
         full_frame_buffer_roi_size=full_frame_buffer_roi_size,
         subsampling_factor=subsample,
-        save_data_fn=exporter_save_data_fn
+        save_data_fn=exporter_save_data_fn,
+        roi=roi
     )
     wd = WaggleDetector(
         max_distance=max_distance,
@@ -118,6 +126,7 @@ def run_wdd(
         fullframe_path=None,
         cam_identifier=cam_identifier,
         start_timestamp=start_timestamp,
+        roi=roi
     )
 
     frame_idx = 0

@@ -18,7 +18,8 @@ class WaggleExporter:
         datetime_buffer,
         min_images=32,
         subsampling_factor=None,
-        save_data_fn=None
+        save_data_fn=None,
+        roi=None
     ):
         self.cam_id = cam_id
         self.output_path = output_path
@@ -29,6 +30,7 @@ class WaggleExporter:
         self.pad_size = self.full_frame_buffer_roi_size // 2
         self.min_images = min_images
         self.subsampling_factor = subsampling_factor
+        self.roi = roi
         # Allow overwriting the data export function (e.g. to calculate scores instead of saving).
         self.save_data_fn = save_data_fn
         if self.save_data_fn is None:
@@ -92,18 +94,22 @@ class WaggleExporter:
             frame_timestamps.append(self.datetime_buffer[idx])
             all_rois.append((roi * 255.0).astype(np.uint8))
             
+        global_offset_x, global_offset_y = 0, 0
+        if self.roi is not None:
+            global_offset_x, global_offset_y = self.roi[:2]
 
         metadata = {
                 "roi_coordinates": [[roi_x0 - self.pad_size, roi_y0 - self.pad_size], [roi_x1 - self.pad_size, roi_y1 - self.pad_size]],
                 "roi_center": [center_x - self.pad_size, center_y - self.pad_size],
                 "timestamp_begin": waggle.timestamp.isoformat(),
-                "x_coordinates": waggle.xs,
-                "y_coordinates": waggle.ys,
+                "x_coordinates": [self.subsampling_factor * x + global_offset_x for x in waggle.xs],
+                "y_coordinates": [self.subsampling_factor * y + global_offset_y for y in waggle.ys],
                 "responses": [float(r) for r in waggle.responses],
                 "frame_timestamps": [ts.isoformat() for ts in frame_timestamps],
                 "camera_timestamps": [ts.isoformat() for ts in waggle.camera_timestamps],
                 "frame_buffer_indices": [ts % self.full_frame_buffer_len for ts in waggle.ts],
                 "subsampling": self.subsampling_factor,
+                "global_roi": self.roi
             }
 
         self.save_data_fn(waggle, all_rois, metadata)

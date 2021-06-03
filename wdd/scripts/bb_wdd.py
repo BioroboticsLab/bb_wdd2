@@ -71,6 +71,13 @@ def show_default_option(*args, **kwargs):
     default="",
     help="Automatically optimize hyperparameters given a CSV file with annotations."
 )
+@click.option(
+    "--roi",
+    nargs=4,
+    type=int,
+    default=None,
+    help="Specify a region of interest in pixels in the original video. The four arguments are 'left, top, width, height'."
+)
 def main(
     bee_length,
     autoopt,

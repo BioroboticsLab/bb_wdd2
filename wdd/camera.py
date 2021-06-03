@@ -15,7 +15,7 @@ except ImportError:
 
 
 class Camera:
-    def __init__(self, height, width, fps=None, subsample=0, fullframe_path=None, cam_identifier="cam", start_timestamp=None):
+    def __init__(self, height, width, fps=None, subsample=0, fullframe_path=None, cam_identifier="cam", start_timestamp=None, roi=None):
         self.fps = fps
         self.height = height
         self.width = width
@@ -23,6 +23,10 @@ class Camera:
         self.counter = 0
         self.fullframe_path = fullframe_path
         self.cam_identifier = cam_identifier
+        if roi is not None:
+            roi = list(map(int, [roi[0], roi[1], roi[0] + roi[2], roi[1] + roi[3]]))
+        self.roi = roi
+        
 
         self.start_timestamp = None
         if start_timestamp is not None:
@@ -39,8 +43,11 @@ class Camera:
         raise NotImplementedError()
     
     def subsample_frame(self, frame):
-        if (frame is not None) and (self.subsample > 1):
-            frame = frame[::self.subsample, ::self.subsample]
+        if frame is not None:
+            if self.roi is not None:
+                frame = frame[self.roi[1]:self.roi[3], self.roi[0]:self.roi[2]]
+            if self.subsample > 1:
+                frame = frame[::self.subsample, ::self.subsample]
         return frame
 
     def get_current_timestamp(self):
@@ -111,9 +118,9 @@ class Camera:
 
 class OpenCVCapture(Camera):
     def __init__(
-        self, height, width, fps, device, subsample=0, fullframe_path=None, cam_identifier=None, start_timestamp=None
+        self, height, width, fps, device, subsample=0, fullframe_path=None, cam_identifier=None, start_timestamp=None, roi=None
     ):
-        super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp)
+        super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp, roi=roi)
 
         self.cap = cv2.VideoCapture(device)
         if not self.cap.isOpened():
@@ -148,9 +155,9 @@ class OpenCVCapture(Camera):
 
 class Flea3Capture(Camera):
     def __init__(
-        self, height, width, device, subsample=0,  fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None
+        self, height, width, device, subsample=0,  fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None, roi=None
     ):
-        super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp)
+        super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp, roi=roi)
 
         self.device = device
 
