@@ -19,7 +19,7 @@ def parse_waggle_metadata(waggle_metadata):
                                     
     return waggle_metadata
 
-def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length):
+def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length, verbose=True):
 
     all_waggle_metadata = [parse_waggle_metadata(m) for m in all_waggle_metadata]
 
@@ -60,7 +60,8 @@ def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length):
                 hits.append(0)
                 continue
             elif waggles.shape[0] > 1:
-                print("Found more than one waggle for GT.")
+                if verbose:
+                    print("Found more than one waggle for GT.")
 
             matched_waggles[np.array(waggles.index, dtype=np.int)] = 1
             hits.append(1)

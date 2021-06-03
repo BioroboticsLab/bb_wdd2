@@ -66,7 +66,7 @@ class WaggleExporter:
         frame_idx_offset = frame_idx - waggle.ts[0] - 20
         if frame_idx_offset >= self.full_frame_buffer_len:
             frame_idx_offset = self.full_frame_buffer_len - 1
-            print("Warning: Waggle ({}) longer than frame buffer size".format(waggle_path))
+            print("Warning: Waggle ({}) longer than frame buffer size".format(waggle.timestamp))
         elif frame_idx_offset < self.min_images:
             frame_idx_offset = self.min_images
 

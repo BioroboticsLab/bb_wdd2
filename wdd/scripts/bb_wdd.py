@@ -110,7 +110,7 @@ def main(
             fun_kwargs["exporter_save_data_fn"] = save_waggle
             fps = run_wdd(**fun_kwargs)
 
-            results = calculate_scores(all_waggles, ground_truth, bee_length=bee_length)
+            results = calculate_scores(all_waggles, ground_truth, bee_length=bee_length, verbose=False)
             results["fps"] = fps
             results["loss"] = 1.0 - results["f_0.5"]
             results["status"] = hyperopt.STATUS_OK
