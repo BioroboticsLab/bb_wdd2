@@ -30,7 +30,7 @@ def normalize_rolling_buffer_online(rolling_mean, buffer, output_buffer):
     for y in numba.prange(buffer.shape[1]):
         for x in numba.prange(buffer.shape[2]):
             current_buffer_mean = rolling_mean[y, x]
-            pixel_max = 1e-5
+            pixel_max = 1e-1
             for z in range(buffer.shape[0]):
                 new_value = buffer[z, y, x] - current_buffer_mean
                 new_value = np.abs(new_value)
@@ -56,9 +56,8 @@ def apply_wavelets(wavelets, normalized_frame_buffer, output):
                 if response < 0.0:
                     response = -response
                 pixel_sum += response
-            pixel_sum /= n_wavelets
 
-            output[y, x] = pixel_sum
+            output[y, x] = pixel_sum / n_wavelets
 
 @numba.njit(parallel=True, cache=True)
 def post_process_response(frame_response, fps, activity, activity_long, activity_decay, activity_long_decay, output):
@@ -69,8 +68,9 @@ def post_process_response(frame_response, fps, activity, activity_long, activity
     for y in numba.prange(frame_response.shape[0]):
         for x in numba.prange(frame_response.shape[1]):
             v = frame_response[y, x] ** 2.0
-            activity[y, x] = activity_decay * activity[y, x] + v
-            current_pixel_activity = v - (activity_long[y, x] / fps)
+            new_activity_value = activity_decay * activity[y, x] + v
+            activity[y, x] = new_activity_value
+            current_pixel_activity = new_activity_value - (activity_long[y, x] / fps)
             activity_long[y, x] = activity_long_decay * activity_long[y, x] + v
             
             if current_pixel_activity < 0.0:
@@ -78,7 +78,7 @@ def post_process_response(frame_response, fps, activity, activity_long, activity
             else:
                 current_pixel_activity = current_pixel_activity ** 4.0
             output[y, x] = current_pixel_activity
-            
+
 class FrequencyDetector:
     def __init__(
         self,
