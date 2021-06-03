@@ -90,15 +90,15 @@ def main(
         search_space = dict(
             bee_length = hp.quniform("bee_length", bee_length * 0.8, bee_length * 1.2, q=1),
             subsample = hp.choice("subsample", list(np.arange(
-                                                    int(math.log(bee_length, 2) / math.log(5, 2)),
+                                                    max(int(math.log(bee_length, 2) / math.log(5, 2)), 1),
                                                     int(math.log(bee_length, 2))))),
-            binarization_threshold = hp.uniform("binarization_threshold", 2, 15),
+            binarization_threshold = hp.uniform("binarization_threshold", 2, 10),
             max_frame_distance = hp.uniform("max_frame_distance", 0.1, 0.5),
             min_num_detections = hp.uniform("min_num_detections", 0.05, 0.3),
         )
 
         def objective(fun_kwargs):
-            fun_kwargs = {**fun_kwargs, **kwargs}
+            fun_kwargs = {**kwargs, **fun_kwargs}
             fun_kwargs["no_warmup"] = True
             fun_kwargs["verbose"] = False
             fun_kwargs["bee_length"] = int(fun_kwargs["bee_length"])
@@ -107,21 +107,20 @@ def main(
             all_waggles = []
             def save_waggle(waggle, rois, metadata):
                 all_waggles.append(metadata)
-            fps = fun_kwargs["exporter_save_data_fn"] = save_waggle
-            run_wdd(**fun_kwargs)
+            fun_kwargs["exporter_save_data_fn"] = save_waggle
+            fps = run_wdd(**fun_kwargs)
 
             results = calculate_scores(all_waggles, ground_truth, bee_length=bee_length)
             results["fps"] = fps
-            results["loss"] = results["f_0.5"]
-            results["status"] = "ok"
+            results["loss"] = 1.0 - results["f_0.5"]
+            results["status"] = hyperopt.STATUS_OK
             return results
 
-        best = hyperopt.fmin(objective, search_space, algo=hyperopt.tpe.suggest, max_evals=10, show_progressbar=True)
+        best = hyperopt.fmin(objective, search_space, algo=hyperopt.tpe.suggest, max_evals=20, show_progressbar=True)
 
         print("Optimization finished!")
         print("Best parameters:")
-        print(best)
-        print(hp.space_eval(best))
+        print(hyperopt.space_eval(search_space, best))
 
 
 
