@@ -155,7 +155,7 @@ class OpenCVCapture(Camera):
 
 class Flea3Capture(Camera):
     def __init__(
-        self, height, width, device, subsample=0,  fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None, roi=None
+        self, height, width, fps, device, subsample=0,  fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None, roi=None
     ):
         super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp, roi=roi)
 
