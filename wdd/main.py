@@ -9,7 +9,7 @@ import numpy as np
 
 from wdd.camera import OpenCVCapture, Flea3Capture, cam_generator
 from wdd.processing import FrequencyDetector, WaggleDetector
-from wdd.export import WaggleExporter
+from wdd.export import WaggleSerializer, WaggleExportPipeline
 
 
 def run_wdd(
@@ -32,7 +32,7 @@ def run_wdd(
     start_timestamp,
     roi,
     verbose=True,
-    exporter_save_data_fn=None
+    export_steps=None
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -48,10 +48,12 @@ def run_wdd(
     else:
         raise RuntimeError("capture_type must be either OpenCV or PyCapture2")
 
-    if roi is not None:
+    if roi is not None and roi:
         width = int(roi[2])
         height = int(roi[3])
-
+    else:
+        roi = None
+        
     subsample = int(subsample)
     if subsample > 1:
         height = math.ceil(height / subsample)
@@ -88,16 +90,17 @@ def run_wdd(
     frame_scale = frame_orig.shape[0] / height, frame_orig.shape[1] / width
 
     dd = FrequencyDetector(height=height, width=width, fps=fps)
-    exporter = WaggleExporter(
+    if export_steps is None:
+        export_steps = [WaggleSerializer(cam_id=cam_identifier, output_path=output_path)]
+    exporter = WaggleExportPipeline(
         cam_id=cam_identifier,
-        output_path=output_path,
         datetime_buffer=datetime_buffer,
         full_frame_buffer=full_frame_buffer,
         full_frame_buffer_len=full_frame_buffer_len,
         full_frame_buffer_roi_size=full_frame_buffer_roi_size,
         subsampling_factor=subsample,
-        save_data_fn=exporter_save_data_fn,
-        roi=roi
+        roi=roi,
+        export_steps=export_steps
     )
     wd = WaggleDetector(
         max_distance=max_distance,

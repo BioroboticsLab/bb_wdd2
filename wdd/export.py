@@ -5,38 +5,20 @@ from os.path import join
 from os import makedirs
 import json
 import imageio
+import queue
+import threading
 
-
-class WaggleExporter:
+class WaggleSerializer:
     def __init__(
         self,
         cam_id,
-        output_path,
-        full_frame_buffer,
-        full_frame_buffer_len,
-        full_frame_buffer_roi_size,
-        datetime_buffer,
-        min_images=32,
-        subsampling_factor=None,
-        save_data_fn=None,
-        roi=None
+        output_path
     ):
+
         self.cam_id = cam_id
         self.output_path = output_path
-        self.full_frame_buffer = full_frame_buffer
-        self.full_frame_buffer_len = full_frame_buffer_len
-        self.full_frame_buffer_roi_size = full_frame_buffer_roi_size
-        self.datetime_buffer = datetime_buffer
-        self.pad_size = self.full_frame_buffer_roi_size // 2
-        self.min_images = min_images
-        self.subsampling_factor = subsampling_factor
-        self.roi = roi
-        # Allow overwriting the data export function (e.g. to calculate scores instead of saving).
-        self.save_data_fn = save_data_fn
-        if self.save_data_fn is None:
-            self.save_data_fn = self._save_data
 
-    def _save_data(self, waggle, full_frame_rois, metadata_dict):
+    def __call__(self, waggle, full_frame_rois, metadata_dict, **kwargs):
         dt = waggle.timestamp
         y, m, d, h, mn = dt.year, dt.month, dt.day, dt.hour, dt.minute
         waggle_path = join(
@@ -63,7 +45,57 @@ class WaggleExporter:
         with open(join(waggle_path, "waggle.json"), "w") as f:
             json.dump(metadata_dict, f)
 
+        kwargs["output_path"] = waggle_path
+        return waggle, full_frame_rois, metadata_dict, kwargs
+        
+class WaggleExportPipeline:
+    def __init__(
+        self,
+        cam_id,
+        full_frame_buffer,
+        full_frame_buffer_len,
+        full_frame_buffer_roi_size,
+        datetime_buffer,
+        min_images=32,
+        subsampling_factor=None,
+        export_steps=None,
+        roi=None,
+    ):
+
+        self.cam_id = cam_id
+        self.full_frame_buffer = full_frame_buffer
+        self.full_frame_buffer_len = full_frame_buffer_len
+        self.full_frame_buffer_roi_size = full_frame_buffer_roi_size
+        self.datetime_buffer = datetime_buffer
+        self.pad_size = self.full_frame_buffer_roi_size // 2
+        self.min_images = min_images
+        self.subsampling_factor = subsampling_factor
+        self.roi = roi
+        self.export_steps = export_steps
+
+        self.export_queue = queue.Queue(maxsize=100)
+        self.export_thread = threading.Thread(target=self.process_export_jobs, args=())
+        self.export_thread.daemon = True
+        self.export_thread.start()
+
+    def process_export_jobs(self):
+        while True:
+            waggle_data = self.export_queue.get()
+            if waggle_data is None:
+                return
+            waggle, full_frame_rois, metadata_dict = waggle_data
+            kwargs = dict()
+            for step in self.export_steps:
+                waggle_data = step(waggle, full_frame_rois, metadata_dict, **kwargs)
+                if waggle_data is None:
+                    break
+                waggle, full_frame_rois, metadata_dict, kwargs = waggle_data
+
     def export(self, frame_idx, waggle):
+        waggle_data = self.prepare_export(frame_idx, waggle)
+        self.export_queue.put(waggle_data)
+
+    def prepare_export(self, frame_idx, waggle):
         
         frame_idx_offset = frame_idx - waggle.ts[0] - 20
         if frame_idx_offset >= self.full_frame_buffer_len:
@@ -109,8 +141,9 @@ class WaggleExporter:
                 "camera_timestamps": [ts.isoformat() for ts in waggle.camera_timestamps],
                 "frame_buffer_indices": [ts % self.full_frame_buffer_len for ts in waggle.ts],
                 "subsampling": self.subsampling_factor,
-                "global_roi": self.roi
+                "global_roi": self.roi,
+                "cam_id": self.cam_id,
             }
 
-        self.save_data_fn(waggle, all_rois, metadata)
+        return waggle, all_rois, metadata
 

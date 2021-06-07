@@ -111,13 +111,16 @@ def main(
             fun_kwargs["bee_length"] = int(fun_kwargs["bee_length"])
             fun_kwargs["subsample"] = int(fun_kwargs["subsample"])
 
-            all_waggles = []
-            def save_waggle(waggle, rois, metadata):
-                all_waggles.append(metadata)
-            fun_kwargs["exporter_save_data_fn"] = save_waggle
+            class WaggleMetadataSaver():
+                def __init__(self):
+                    self.all_waggles = []
+                def __call__(self, waggle, rois, metadata):
+                    self.all_waggles.append(metadata)
+            saver = WaggleMetadataSaver()
+            fun_kwargs["export_steps"] = [saver]
             fps = run_wdd(**fun_kwargs)
 
-            results = calculate_scores(all_waggles, ground_truth, bee_length=bee_length, verbose=False)
+            results = calculate_scores(saver.all_waggles, ground_truth, bee_length=bee_length, verbose=False)
             results["fps"] = fps
             results["loss"] = 1.0 - results["f_0.5"]
             results["status"] = hyperopt.STATUS_OK
