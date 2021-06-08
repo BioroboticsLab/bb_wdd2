@@ -10,7 +10,7 @@ import numpy as np
 from wdd.camera import OpenCVCapture, Flea3Capture, cam_generator
 from wdd.processing import FrequencyDetector, WaggleDetector
 from wdd.export import WaggleSerializer, WaggleExportPipeline
-
+from wdd.decoding import WaggleDecoder
 
 def run_wdd(
     capture_type,
@@ -53,7 +53,7 @@ def run_wdd(
         height = int(roi[3])
     else:
         roi = None
-        
+
     subsample = int(subsample)
     if subsample > 1:
         height = math.ceil(height / subsample)
@@ -91,7 +91,7 @@ def run_wdd(
 
     dd = FrequencyDetector(height=height, width=width, fps=fps)
     if export_steps is None:
-        export_steps = [WaggleSerializer(cam_id=cam_identifier, output_path=output_path)]
+        export_steps = [WaggleDecoder(), WaggleSerializer(cam_id=cam_identifier, output_path=output_path)]
     exporter = WaggleExportPipeline(
         cam_id=cam_identifier,
         datetime_buffer=datetime_buffer,

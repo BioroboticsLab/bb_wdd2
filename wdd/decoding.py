@@ -153,7 +153,7 @@ class WaggleDecoder():
         angle = -np.arctan2(v[1][eigenvector_idx], v[0][eigenvector_idx])
         return angle
 
-    def get_correlation_with_frequency(images, hz, samplerate):
+    def get_correlation_with_frequency(self, images, hz, samplerate):
         """Takes a 3D array of images (number, height, width) and calculates each pixels' activation with morlet wavelet corresponding to a certain frequency.
 
         Arguments:
@@ -172,8 +172,8 @@ class WaggleDecoder():
         
         wavelet = wavelet.reshape(wavelet.shape[0], 1, 1)
 
-        corr = scipy.ndimage.convolve(images, wavelet)
-        corr2 = scipy.ndimage.convolve(images, -wavelet)
+        corr = np.real(scipy.ndimage.convolve(images, wavelet))
+        corr2 = np.real(scipy.ndimage.convolve(images, -wavelet))
         corr = np.stack((corr, corr2))
         corr = np.max(corr, axis=0)
         
@@ -289,7 +289,11 @@ class WaggleDecoder():
         return corrected_angle, waggle_length
 
     def __call__(self, waggle, full_frame_rois, metadata_dict, **kwargs):
-        angle, length = self.calculate_fourier_angle_from_waggle_run_images(full_frame_rois)
+        angle, length = self.calculate_fourier_angle_from_waggle_run_images(np.stack(full_frame_rois, axis=0))
+
+        # Make the length serializable to JSON.
+        if np.isnan(length):
+            length = None
 
         metadata_dict["waggle_angle"] = angle
         metadata_dict["waggle_length"] = length
