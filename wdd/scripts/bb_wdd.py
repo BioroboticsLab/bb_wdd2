@@ -72,6 +72,11 @@ def show_default_option(*args, **kwargs):
     help="Automatically optimize hyperparameters given a CSV file with annotations."
 )
 @click.option(
+    "--eval",
+    default="",
+    help="Check the detected waggles against a given CSV file and print evaluation results."
+)
+@click.option(
     "--roi",
     nargs=4,
     type=int,
@@ -90,7 +95,7 @@ def main(
         print("Optimizing hyperparameters..")
         import hyperopt
         from hyperopt import hp
-        from wdd.evaluation import load_ground_truth, calculate_scores
+        from wdd.evaluation import load_ground_truth, calculate_scores, WaggleMetadataSaver
 
         ground_truth = load_ground_truth(autoopt)
         
@@ -111,11 +116,7 @@ def main(
             fun_kwargs["bee_length"] = int(fun_kwargs["bee_length"])
             fun_kwargs["subsample"] = int(fun_kwargs["subsample"])
 
-            class WaggleMetadataSaver():
-                def __init__(self):
-                    self.all_waggles = []
-                def __call__(self, waggle, rois, metadata):
-                    self.all_waggles.append(metadata)
+            
             saver = WaggleMetadataSaver()
             fun_kwargs["export_steps"] = [saver]
             fps = run_wdd(**fun_kwargs)

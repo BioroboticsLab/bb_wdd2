@@ -80,9 +80,10 @@ class WaggleExportPipeline:
         self.export_thread.start()
 
     def finalize_exports(self):
-        if not self.export_queue.empty():
-            print("...please wait for exports to finish...", flush=True)
-        self.export_queue.put(None)
+        if self.export_queue is not None:
+            if not self.export_queue.empty():
+                print("...please wait for exports to finish...", flush=True)
+            self.export_queue.put(None)
         self.export_thread.join()
 
     def process_export_jobs(self):
@@ -90,15 +91,27 @@ class WaggleExportPipeline:
             waggle_data = self.export_queue.get()
             if waggle_data is None:
                 return
-            waggle, full_frame_rois, metadata_dict = waggle_data
-            kwargs = dict()
-            for step in self.export_steps:
-                waggle_data = step(waggle, full_frame_rois, metadata_dict, **kwargs)
-                if waggle_data is None:
-                    break
-                waggle, full_frame_rois, metadata_dict, kwargs = waggle_data
+            try:
+                waggle, full_frame_rois, metadata_dict = waggle_data
+                kwargs = dict()
+                for step in self.export_steps:
+                    waggle_data = step(waggle, full_frame_rois, metadata_dict, **kwargs)
+                    if waggle_data is None:
+                        break
+                    waggle, full_frame_rois, metadata_dict, kwargs = waggle_data
+            except Exception as e:
+                # Catch the error, because this thread crashing will not stop the program anyway.
+                print("\nError in serialization thread:")
+                import traceback
+                traceback.print_exc()
+                print(str(e), flush=True)
+                # This, however, will lead to an error later.
+                self.export_queue = None
+                return
 
     def export(self, frame_idx, waggle):
+        if self.export_queue is None:
+            raise RuntimeError("Exporting thread not running.")
         waggle_data = self.prepare_export(frame_idx, waggle)
         self.export_queue.put(waggle_data)
 

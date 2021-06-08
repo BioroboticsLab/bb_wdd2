@@ -33,7 +33,8 @@ def run_wdd(
     start_timestamp,
     roi,
     verbose=True,
-    export_steps=None
+    export_steps=None,
+    eval=""
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -86,8 +87,15 @@ def run_wdd(
     frame_scale = frame_orig.shape[0] / height, frame_orig.shape[1] / width
 
     dd = FrequencyDetector(height=height, width=width, fps=fps)
+    waggle_metadata_saver = None
     if export_steps is None:
-        export_steps = [WaggleDecoder(), WaggleSerializer(cam_id=cam_identifier, output_path=output_path)]
+        export_steps = [WaggleDecoder(fps=fps)]
+        if eval:
+            from wdd.evaluation import WaggleMetadataSaver
+            waggle_metadata_saver = WaggleMetadataSaver()
+            export_steps.append(waggle_metadata_saver)
+        export_steps.append(WaggleSerializer(cam_id=cam_identifier, output_path=output_path))
+
     exporter = WaggleExportPipeline(
         cam_id=cam_identifier,
         datetime_buffer=datetime_buffer,
@@ -205,4 +213,9 @@ def run_wdd(
         print("\nSaving running exports..", flush=True)
         exporter.finalize_exports()
 
+    if waggle_metadata_saver is not None:
+        import wdd.evaluation
+        ground_truth = wdd.evaluation.load_ground_truth(eval)
+        results = wdd.evaluation.calculate_scores(waggle_metadata_saver.all_waggles, ground_truth, bee_length=bee_length, verbose=False)
+        print(results)
     return processing_fps

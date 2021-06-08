@@ -2,6 +2,12 @@ import datetime
 import numpy as np
 import pandas
 
+class WaggleMetadataSaver():
+    def __init__(self):
+        self.all_waggles = []
+    def __call__(self, waggle, rois, metadata, **kwargs):
+        self.all_waggles.append(metadata)
+
 def load_ground_truth(path):
     if path.endswith("pickle"):
         annotations = pandas.read_pickle(path)
