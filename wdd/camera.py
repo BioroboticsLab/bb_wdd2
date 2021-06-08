@@ -58,19 +58,17 @@ class Camera:
         return timestamp
 
     def get_frame(self):
-        ret, frame_orig, timestamp = self._get_frame()
+        ret, frame, full_frame, timestamp = self._get_frame()
 
         if not ret:
-            return ret, frame_orig, frame_orig, timestamp
+            return ret, frame, full_frame, timestamp
 
-        if frame_orig.shape[0] != self.height or frame_orig.shape[1] != self.width:
-            frame = skimage.transform.resize(frame_orig, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
+        if frame.shape[0] != self.height or frame.shape[1] != self.width:
+            frame = skimage.transform.resize(frame, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
 
             if not self.resize_warning_emitted:
                 self.resize_warning_emitted = True
                 print("Warning! Necessary to resize the image after subsampling ({}) to fit into desired output shape ({}). This could be slow.".format(frame_orig.shape, frame.shape))
-        else:
-            frame = frame_orig
             
         # store on full frame image every hour
         if self.fullframe_path and (self.counter % (self.fps * 60 * 60) == 0):
@@ -78,11 +76,14 @@ class Camera:
                 self.fullframe_path, "{}-{}.png".format(self.cam_identifier, timestamp.isoformat())
             )
             print("\nStoring full frame image: {}".format(fullframe_im_path))
-            imageio.imwrite(fullframe_im_path, (frame_orig * 255.0).astype(np.uint8))
+            output_frame = full_frame
+            if np.max(output_frame) < 1.0 + 1e-3:
+                output_frame = (output_frame * 255.0).astype(np.uint8)
+            imageio.imwrite(fullframe_im_path, output_frame)
 
         self.counter += 1
 
-        return ret, frame, frame_orig, timestamp
+        return ret, frame, full_frame, timestamp
 
     def warmup(self, tolerance=0.01, num_frames_per_round=100, num_hits=3):
         fps_target = self.fps - tolerance * self.fps
@@ -142,15 +143,18 @@ class OpenCVCapture(Camera):
     def _get_frame(self):
         ret, self.capture_double_buffer = self.cap.read(self.capture_double_buffer)
         timestamp = self.get_current_timestamp()
+        frame, full_frame = None, None
 
-        frame_orig = self.subsample_frame(self.capture_double_buffer)
-        if frame_orig is not None:
+        if self.capture_double_buffer is not None:
+            full_frame = self.capture_double_buffer.copy()
+            frame = self.subsample_frame(full_frame)
+
             if self.buffer_frame_rgb_float is None:
-                self.buffer_frame_rgb_float = np.zeros(shape=frame_orig.shape, dtype=np.float32)
-            self.buffer_frame_rgb_float[:] = frame_orig
+                self.buffer_frame_rgb_float = np.zeros(shape=frame.shape, dtype=np.float32)
+            self.buffer_frame_rgb_float[:] = frame
             self.buffer_frame_rgb_float /= 255.0
-            frame_orig = self.buffer_frame_rgb_float.mean(axis=2)
-        return ret, frame_orig, timestamp
+            frame = self.buffer_frame_rgb_float.mean(axis=2)
+        return ret, frame, full_frame, timestamp
 
 
 class Flea3Capture(Camera):
@@ -216,13 +220,13 @@ class Flea3Capture(Camera):
     def _get_frame(self):
         # This requires a modified PyCapture2 with numpy bindings
         # https://github.com/GreenSlime96/PyCapture2_NumPy
-        im = np.array(self.cap.retrieveBuffer())
+        full_frame = np.array(self.cap.retrieveBuffer())
         timestamp = self.get_current_timestamp()
 
-        im = self.subsample_frame(im)
+        im = self.subsample_frame(full_frame)
         im = im.astype(np.float32) / 255.0
 
-        return True, im, timestamp
+        return True, im, full_frame, timestamp
 
 
 def cam_generator(cam_object, warmup=True, *args, **kwargs):

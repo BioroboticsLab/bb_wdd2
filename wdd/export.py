@@ -40,6 +40,7 @@ class WaggleSerializer:
         )
 
         for im_idx, roi in enumerate(full_frame_rois):
+            roi = (roi * 255.0).astype(np.uint8)
             imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), roi)
 
         with open(join(waggle_path, "waggle.json"), "w") as f:
@@ -78,6 +79,12 @@ class WaggleExportPipeline:
         self.export_thread.daemon = True
         self.export_thread.start()
 
+    def finalize_exports(self):
+        if not self.export_queue.empty():
+            print("...please wait for exports to finish...", flush=True)
+        self.export_queue.put(None)
+        self.export_thread.join()
+
     def process_export_jobs(self):
         while True:
             waggle_data = self.export_queue.get()
@@ -105,26 +112,42 @@ class WaggleExportPipeline:
             frame_idx_offset = self.min_images
 
         # FIXME: scaling factor should depend on camera resolution
-        center_x = int(np.median(waggle.xs)) + self.pad_size
-        center_y = int(np.median(waggle.ys)) + self.pad_size
+        center_x = int(np.median(waggle.xs)) * self.subsampling_factor
+        center_y = int(np.median(waggle.ys)) * self.subsampling_factor
+        if self.roi is not None:
+            center_x += self.roi[0]
+            center_y += self.roi[1]
 
-        assert center_y < self.full_frame_buffer.shape[1]
-        assert center_x < self.full_frame_buffer.shape[2]
+        assert center_y < self.full_frame_buffer[0].shape[0]
+        assert center_x < self.full_frame_buffer[0].shape[1]
 
-        roi_x0, roi_x1 = max(0, center_x - self.pad_size), center_x + self.pad_size
-        roi_y0, roi_y1 = max(0, center_y - self.pad_size), center_y + self.pad_size
+        roi_x0, roi_x1 = center_x - self.pad_size, center_x + self.pad_size
+        roi_y0, roi_y1 = center_y - self.pad_size, center_y + self.pad_size
         
         all_rois = []
         frame_timestamps = []
         for im_idx, idx in enumerate(range(frame_idx - frame_idx_offset, frame_idx)):
             idx %= self.full_frame_buffer_len
-            roi = self.full_frame_buffer[
-                idx,
-                roi_y0:roi_y1,
-                roi_x0:roi_x1,
+            roi = self.full_frame_buffer[idx]
+            full_height, full_width = roi.shape[:2]
+            roi = roi[
+                max(0, roi_y0):min(full_height, roi_y1),
+                max(0, roi_x0):min(full_width, roi_x1)
             ]
+            if len(roi.shape) > 2:
+                roi = np.mean(roi, axis=2)
+
+            roi_target = np.mean(roi) * np.ones(shape=(self.full_frame_buffer_roi_size, self.full_frame_buffer_roi_size), dtype=np.float32)
+            to_end_x = roi_target.shape[1] - (roi_x1 - min(full_width, roi_x1))
+            to_end_y = roi_target.shape[0] - (roi_y1 - min(full_height, roi_y1))
+            roi_target[
+                (max(0, roi_y0) - roi_y0):to_end_y,
+                (max(0, roi_x0) - roi_x0):to_end_x] = roi
+            if roi.max() > 1.0 + 1e-3:
+                roi_target /= 255.0
+
             frame_timestamps.append(self.datetime_buffer[idx])
-            all_rois.append((roi * 255.0).astype(np.uint8))
+            all_rois.append(roi_target)
             
         global_offset_x, global_offset_y = 0, 0
         if self.roi is not None:

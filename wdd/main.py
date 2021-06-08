@@ -74,17 +74,10 @@ def run_wdd(
     )
     _, _, frame_orig, _ = next(frame_generator)
 
-    full_frame_buffer_roi_size = bee_length * 10
-    pad_size = full_frame_buffer_roi_size // 2
+    full_frame_buffer_roi_size = bee_length * 5
     full_frame_buffer_len = 100
-    full_frame_buffer = np.zeros(
-        (
-            full_frame_buffer_len,
-            frame_orig.shape[0] + 2 * pad_size,
-            frame_orig.shape[1] + 2 * pad_size,
-        ),
-        dtype=np.float32,
-    )
+    # Buffer is a list instead of an array to save one copy if no images need to be saved.
+    full_frame_buffer = [None] * full_frame_buffer_len
     datetime_buffer = [datetime.datetime.min.isoformat() for _ in range(full_frame_buffer_len)]
 
     frame_scale = frame_orig.shape[0] / height, frame_orig.shape[1] / width
@@ -149,59 +142,63 @@ def run_wdd(
     
     processing_fps = None
 
-    with generator_context as gen:
-        for ret, frame, frame_orig, timestamp in gen:
-            if frame_idx % 10000 == 0:
-                start_time = time.time()
+    try:
+            
+        with generator_context as gen:
+            for ret, frame, frame_orig, timestamp in gen:
+                if frame_idx % 10000 == 0:
+                    start_time = time.time()
 
-            if not ret:
-                print("Unable to retrieve frame from video device")
-                break
+                if not ret:
+                    print("Unable to retrieve frame from video device")
+                    break
 
-            full_frame_buffer[
-                frame_idx % full_frame_buffer_len, pad_size:-pad_size, pad_size:-pad_size
-            ] = frame_orig
-            datetime_buffer[frame_idx % full_frame_buffer_len] = timestamp
+                full_frame_buffer[frame_idx % full_frame_buffer_len] = frame_orig
+                datetime_buffer[frame_idx % full_frame_buffer_len] = timestamp
 
-            activity = dd.process(frame)
-            if activity is not None:
-                wd.process(frame_idx, activity)
+                activity = dd.process(frame)
+                if activity is not None:
+                    wd.process(frame_idx, activity)
 
-            if debug and frame_idx % debug_frames == 0:
-                current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
-                current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.current_waggles]
-                for blob_index, ((y, x), nd) in enumerate(
-                    zip(current_waggle_positions, current_waggle_num_detections)
-                ):
-                    cv2.circle(
-                        frame_orig,
-                        (int(x * frame_scale[0]), int(y * frame_scale[1])),
-                        10,
-                        (0, 0, 255),
-                        2,
-                    )
-
-                im = (frame_orig * 255).astype(np.uint8)
-                im = np.repeat(im[:, :, None], 3, axis=2)
-                activity_im = (activity - activity.min())
-                activity_im /= activity_im.max()
-                activity_im = (activity_im * 255.0).astype(np.uint8)
-                activity_im = cv2.applyColorMap(activity_im, cv2.COLORMAP_VIRIDIS)
-                im = cv2.addWeighted(im, 0.25, activity_im, 0.75, 0)
-                cv2.imshow("WDD", im)
-                cv2.waitKey(1)
-
-            if frame_idx > 0 and (frame_idx % fps == 0):
-                end_time = time.time()
-                processing_fps = ((frame_idx % 10000) + 1) / (end_time - start_time)
-                if verbose:
-                    sys.stdout.write(
-                        "\rCurrently processing with FPS: {:.1f} | Max DD: {:.2f} | [{:16s} {}]".format(
-                            processing_fps, np.log1p(activity.max()), cam_identifier, video_device
+                if debug and frame_idx % debug_frames == 0:
+                    current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
+                    current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.current_waggles]
+                    for blob_index, ((y, x), nd) in enumerate(
+                        zip(current_waggle_positions, current_waggle_num_detections)
+                    ):
+                        cv2.circle(
+                            frame_orig,
+                            (int(x * frame_scale[0]), int(y * frame_scale[1])),
+                            10,
+                            (0, 0, 255),
+                            2,
                         )
-                    )
-                    sys.stdout.flush()
 
-            frame_idx = frame_idx + 1
+                    im = (frame_orig * 255).astype(np.uint8)
+                    im = np.repeat(im[:, :, None], 3, axis=2)
+                    activity_im = (activity - activity.min())
+                    activity_im /= activity_im.max()
+                    activity_im = (activity_im * 255.0).astype(np.uint8)
+                    activity_im = cv2.applyColorMap(activity_im, cv2.COLORMAP_VIRIDIS)
+                    im = cv2.addWeighted(im, 0.25, activity_im, 0.75, 0)
+                    cv2.imshow("WDD", im)
+                    cv2.waitKey(1)
+
+                if frame_idx > 0 and (frame_idx % fps == 0):
+                    end_time = time.time()
+                    processing_fps = ((frame_idx % 10000) + 1) / (end_time - start_time)
+                    if verbose:
+                        sys.stdout.write(
+                            "\rCurrently processing with FPS: {:.1f} | Max DD: {:.2f} | [{:16s} {}]".format(
+                                processing_fps, np.log1p(activity.max()), cam_identifier, video_device
+                            )
+                        )
+                        sys.stdout.flush()
+
+                frame_idx = frame_idx + 1
+    finally:
+        # Wait for all remaining data to be written.
+        print("\nSaving running exports..", flush=True)
+        exporter.finalize_exports()
 
     return processing_fps
