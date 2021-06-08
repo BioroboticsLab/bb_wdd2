@@ -72,11 +72,12 @@ class Camera:
             return ret, frame, full_frame, timestamp
 
         if frame.shape[0] != self.height or frame.shape[1] != self.width:
+            frame_original_shape = frame.shape
             frame = skimage.transform.resize(frame, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
 
             if not self.resize_warning_emitted:
                 self.resize_warning_emitted = True
-                print("Warning! Necessary to resize the image after subsampling ({}) to fit into desired output shape ({}). This could be slow.".format(frame_orig.shape, frame.shape))
+                print("Warning! Necessary to resize the image after subsampling ({}) to fit into desired output shape ({}). This could be slow.".format(frame_original_shape, frame.shape))
             
         # store on full frame image every hour
         if self.fullframe_path and (self.counter % (self.fps * 60 * 60) == 0):
