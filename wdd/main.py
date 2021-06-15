@@ -3,11 +3,12 @@ import cv2
 import datetime
 import os
 import sys
+import skimage.transform
 import time
 import math
 import numpy as np
 
-from wdd.camera import OpenCVCapture, Flea3Capture, cam_generator
+from wdd.camera import OpenCVCapture, Flea3Capture, Flea3CapturePySpin, cam_generator
 from wdd.processing import FrequencyDetector, WaggleDetector
 from wdd.export import WaggleSerializer, WaggleExportPipeline
 from wdd.decoding import WaggleDecoder
@@ -45,8 +46,10 @@ def run_wdd(
         cam_obj = OpenCVCapture
     elif capture_type == "PyCapture2":
         cam_obj = Flea3Capture
+    elif capture_type == "PySpin":
+        cam_obj = Flea3CapturePySpin
     else:
-        raise RuntimeError("capture_type must be either OpenCV or PyCapture2")
+        raise RuntimeError("capture_type must be either OpenCV, PyCapture2, PySpin")
 
     if roi is not None and roi:
         width = int(roi[2])
@@ -178,6 +181,7 @@ def run_wdd(
                     im = np.repeat(im[:, :, None], 3, axis=2)
                     activity_im = (activity - activity.min())
                     activity_im /= activity_im.max()
+                    activity_im = skimage.transform.resize(activity_im, im.shape[:2])
                     activity_im = (activity_im * 255.0).astype(np.uint8)
                     activity_im = cv2.applyColorMap(activity_im, cv2.COLORMAP_VIRIDIS)
                     im = cv2.addWeighted(im, 0.25, activity_im, 0.75, 0)

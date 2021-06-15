@@ -7,11 +7,19 @@ import skimage.transform
 import time
 import os
 
+flea3_supported = False
+try:
+    import PySpin
+    import simple_pyspin
+    flea3_supported = True
+except ImportError:
+    print("Unable to import PySpin and simple_pyspin for Flea3 cameras. Trying legacy SDK..")
 
 try:
     import PyCapture2
 except ImportError:
-    print("Unable to import PyCapture2, Flea3 cameras won't work")
+    if not flea3_supported:
+        print("Unable to import PyCapture2, Flea3 cameras won't work")
 
 
 class Camera:
@@ -115,6 +123,9 @@ class Camera:
             if hits >= num_hits:
                 print("Success")
                 break
+
+    def stop(self):
+        pass
 
 
 class OpenCVCapture(Camera):
@@ -228,14 +239,61 @@ class Flea3Capture(Camera):
 
         return True, im, full_frame, timestamp
 
+class Flea3CapturePySpin(Camera):
+    def __init__(
+        self, height, width, fps, device, subsample=0,  fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None, roi=None
+    ):
+        super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp,
+                        roi=None) # Don't pass on ROI. Use the camera feature instead.
+
+        try:
+            device = int(device)
+        except:
+            pass
+        self.device = device
+        self.camera = simple_pyspin.Camera(index=self.device)
+
+        self.camera.PixelFormat = "MONO8"
+
+        self.camera.AcquisitionFrameRateAuto = 'Off'
+        self.camera.AcquisitionFrameRateEnabled = True
+        self.camera.AcquisitionFrameRate = int(fps)
+
+        self.camera.GammaEnabled = False
+
+        if roi is not None:
+            self.camera.OffsetX = roi[0]
+            self.camera.OffsetY = roi[1]
+            self.camera.Width = roi[2]
+            self.camera.Height = roi[3]
+
+        self.camera.init()
+        self.camera.start()
+
+    def _get_frame(self):
+        full_frame = self.camera.get_array()
+        timestamp = self.get_current_timestamp()
+
+        im = self.subsample_frame(full_frame)
+        im = im.astype(np.float32) / 255.0
+
+        return True, im, full_frame, timestamp
+
+    def stop(self):
+        self.camera.stop()
+        self.camera.close()
 
 def cam_generator(cam_object, warmup=True, *args, **kwargs):
     cam = cam_object(*args, **kwargs)
     if warmup:
         cam.warmup()
 
-    while True:
-        ret, frame, frame_orig, timestamp = cam.get_frame()
-        if not ret:
-            break
-        yield ret, frame, frame_orig, timestamp
+    try:
+        while True:
+            ret, frame, frame_orig, timestamp = cam.get_frame()
+            if not ret:
+                break
+            yield ret, frame, frame_orig, timestamp
+    finally:
+        if cam is not None:
+            cam.stop()
