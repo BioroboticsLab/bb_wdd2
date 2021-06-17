@@ -64,6 +64,8 @@ def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length, verbose=T
                                                             "end_x", "end_y",
                                                             "start_ts", "end_ts"]].itertuples(index=False):
             gt_vector = np.array([x1, y1]) - np.array([x0, y0])
+            gt_vector[1] *= -1.0
+            gt_angle = np.arctan2(gt_vector[1], gt_vector[0])
             gt_vector /= np.linalg.norm(gt_vector)
             
             p = bee_length
@@ -133,6 +135,7 @@ def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length, verbose=T
     if decoding_results:
         decoding_results = pandas.DataFrame(decoding_results)
         results["angular_error_rad"] = np.nanmean(decoding_results.angular_error_rad.values)
+        results["angular_error_deg"] = np.nanmean(decoding_results.angular_error_deg.values)
         results["angular_error_deg"] = np.nanmean(decoding_results.angular_error_deg.values)
         results["duration_error"] = np.nanmean(decoding_results.duration_error.values)
     return results
