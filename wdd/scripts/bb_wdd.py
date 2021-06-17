@@ -33,7 +33,7 @@ def show_default_option(*args, **kwargs):
 )
 @show_default_option(
     "--max_frame_distance",
-    default=0.2,
+    default=0.5,
     help="Maximum time inbetween frequency detections within one waggle in seconds",
 )
 @show_default_option(
@@ -105,7 +105,7 @@ def main(
                                                     max(int(math.log(bee_length, 2) / math.log(5, 2)), 1),
                                                     int(math.log(bee_length, 2))))),
             binarization_threshold = hp.uniform("binarization_threshold", 2, 10),
-            max_frame_distance = hp.uniform("max_frame_distance", 0.1, 0.5),
+            max_frame_distance = hp.uniform("max_frame_distance", 0.25, 0.6),
             min_num_detections = hp.uniform("min_num_detections", 0.05, 0.3),
         )
 

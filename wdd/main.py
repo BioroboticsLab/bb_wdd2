@@ -79,7 +79,7 @@ def run_wdd(
     _, _, frame_orig, _ = next(frame_generator)
 
     full_frame_buffer_roi_size = bee_length * 5
-    full_frame_buffer_len = 100
+    full_frame_buffer_len = 3 * int(fps)
     # Buffer is a list instead of an array to save one copy if no images need to be saved.
     full_frame_buffer = [None] * full_frame_buffer_len
     datetime_buffer = [datetime.datetime.min.isoformat() for _ in range(full_frame_buffer_len)]
@@ -89,7 +89,7 @@ def run_wdd(
     dd = FrequencyDetector(height=height, width=width, fps=fps)
     waggle_metadata_saver = None
     if export_steps is None:
-        export_steps = [WaggleDecoder(fps=fps)]
+        export_steps = [WaggleDecoder(fps=fps, bee_length=bee_length)]
         if eval:
             from wdd.evaluation import WaggleMetadataSaver
             waggle_metadata_saver = WaggleMetadataSaver()
@@ -103,6 +103,8 @@ def run_wdd(
         full_frame_buffer_len=full_frame_buffer_len,
         full_frame_buffer_roi_size=full_frame_buffer_roi_size,
         subsampling_factor=subsample,
+        fps=fps,
+        min_images=int(1.5 * fps),
         roi=roi,
         export_steps=export_steps
     )

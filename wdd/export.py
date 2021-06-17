@@ -57,7 +57,8 @@ class WaggleExportPipeline:
         full_frame_buffer_len,
         full_frame_buffer_roi_size,
         datetime_buffer,
-        min_images=32,
+        fps=None,
+        min_images=None,
         subsampling_factor=None,
         export_steps=None,
         roi=None,
@@ -69,6 +70,7 @@ class WaggleExportPipeline:
         self.full_frame_buffer_roi_size = full_frame_buffer_roi_size
         self.datetime_buffer = datetime_buffer
         self.pad_size = self.full_frame_buffer_roi_size // 2
+        self.fps = fps
         self.min_images = min_images
         self.subsampling_factor = subsampling_factor
         self.roi = roi
@@ -117,7 +119,8 @@ class WaggleExportPipeline:
 
     def prepare_export(self, frame_idx, waggle):
         
-        frame_idx_offset = frame_idx - waggle.ts[0] - 20
+        # Store a second of images before waggle start.
+        frame_idx_offset = frame_idx - waggle.ts[0] + int(self.fps)
         if frame_idx_offset >= self.full_frame_buffer_len:
             frame_idx_offset = self.full_frame_buffer_len - 1
             print("Warning: Waggle ({}) longer than frame buffer size".format(waggle.timestamp))
