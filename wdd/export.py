@@ -67,7 +67,7 @@ class WaggleExportPipeline:
         self.cam_id = cam_id
         self.full_frame_buffer = full_frame_buffer
         self.full_frame_buffer_len = full_frame_buffer_len
-        self.full_frame_buffer_roi_size = full_frame_buffer_roi_size
+        self.full_frame_buffer_roi_size = (full_frame_buffer_roi_size // 2) * 2 # Force crop being even.
         self.datetime_buffer = datetime_buffer
         self.pad_size = self.full_frame_buffer_roi_size // 2
         self.fps = fps
