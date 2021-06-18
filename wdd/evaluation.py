@@ -88,6 +88,9 @@ def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length, verbose=T
                 waggle_duration = waggles.duration.iloc[waggle_idx]
                 waggle_angle = waggles.angle.iloc[waggle_idx]
 
+                if waggle_angle is None or np.isnan(waggle_angle):
+                    continue
+
                 waggle_vector = np.array([np.cos(waggle_angle), np.sin(waggle_angle)])
                 angle_dot = np.dot(gt_vector, waggle_vector)
                 angle_error = np.arccos(angle_dot)
