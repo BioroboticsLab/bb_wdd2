@@ -18,36 +18,59 @@ class WaggleSerializer:
         self.cam_id = cam_id
         self.output_path = output_path
 
+        self.queue = queue.Queue()
+        self.thread = threading.Thread(target=self.serialize, args=())
+        self.thread.daemon = False
+        self.thread.start()
+
     def __call__(self, waggle, full_frame_rois, metadata_dict, **kwargs):
-        dt = waggle.timestamp
-        y, m, d, h, mn = dt.year, dt.month, dt.day, dt.hour, dt.minute
-        waggle_path = join(
-            self.output_path, str(self.cam_id), str(y), str(m), str(d), str(h), str(mn)
-        )
-        makedirs(waggle_path, exist_ok=True)
-        waggle_idx = len(
-            list(
-                filter(
-                    lambda x: os.path.isdir(os.path.join(waggle_path, x)), os.listdir(waggle_path)
+
+        self.queue.put((waggle, full_frame_rois, metadata_dict, kwargs))
+
+        return waggle, full_frame_rois, metadata_dict, kwargs
+
+    def serialize(self):
+
+        while True:
+
+            data = self.queue.get()
+            if data is None:
+                break
+
+            waggle, full_frame_rois, metadata_dict, kwargs = data
+
+            dt = waggle.timestamp
+            y, m, d, h, mn = dt.year, dt.month, dt.day, dt.hour, dt.minute
+            waggle_path = join(
+                self.output_path, str(self.cam_id), str(y), str(m), str(d), str(h), str(mn)
+            )
+
+            makedirs(waggle_path, exist_ok=True)
+            waggle_idx = len(
+                list(
+                    filter(
+                        lambda x: os.path.isdir(os.path.join(waggle_path, x)), os.listdir(waggle_path)
+                    )
                 )
             )
-        )
-        waggle_path = join(waggle_path, str(waggle_idx))
-        makedirs(waggle_path, exist_ok=True)
+            waggle_path = join(waggle_path, str(waggle_idx))
+            makedirs(waggle_path, exist_ok=True)
 
-        print(
-            "\r{} - {}: Saving new waggle: {}{}".format(self.cam_id, datetime.utcnow(), waggle_path, " " * 20)
-        )
+            print(
+                "\r{} - {}: Saving new waggle: {}{}".format(self.cam_id, datetime.utcnow(), waggle_path, " " * 20)
+            )
 
-        for im_idx, roi in enumerate(full_frame_rois):
-            roi = (roi * 255.0).astype(np.uint8)
-            imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), roi)
+            for im_idx, roi in enumerate(full_frame_rois):
+                roi = (roi * 255.0).astype(np.uint8)
+                imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), roi)
 
-        with open(join(waggle_path, "waggle.json"), "w") as f:
-            json.dump(metadata_dict, f)
+            with open(join(waggle_path, "waggle.json"), "w") as f:
+                json.dump(metadata_dict, f)
 
-        kwargs["output_path"] = waggle_path
-        return waggle, full_frame_rois, metadata_dict, kwargs
+    def finalize_serialization(self):
+        if self.queue is not None:
+            self.queue.put(None)
+        self.thread.join()
         
 class WaggleExportPipeline:
     def __init__(

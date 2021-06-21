@@ -47,7 +47,33 @@ def largest_consecutive_region(a):
         current_length = 0
         current_begin = None
     return begin, end
-    
+
+def debug_display_img(img, delay=1, vmin=None, vmax=None, angles=None, point=None):
+    import cv2
+    if vmin is None:
+        vmin = img.min()
+    activity_im = (img - vmin)
+    if vmax is None:
+        vmax = activity_im.max()
+    activity_im /= vmax
+    activity_im = (activity_im * 255.0).astype(np.uint8)
+    activity_im = cv2.applyColorMap(activity_im, cv2.COLORMAP_VIRIDIS)
+    if angles is not None:
+        for idx, angle in enumerate(angles):
+            if angle is None:
+                continue
+            color = [(120, 255, 0), (255, 120, 50)][idx]
+            w = activity_im.shape[0] // 2
+            mx, my = activity_im.shape[1] // 2, activity_im.shape[0] // 2
+            # In this coordinate system, 0° is straight-right, positive is counter-clockwise.
+            cv2.line(activity_im, 
+                    (int(mx + w * np.cos(angle)), int(my + -1.0 * w * np.sin(angle))),
+                    (int(mx - 0.5 * w * np.cos(angle)), int(my - 0.5 * -1.0 * w * np.sin(angle))),
+                    color, thickness=2)
+    if point is not None:
+        cv2.circle(activity_im, point, 5, color=(255, 0, 0))
+    cv2.imshow("WDD", activity_im)
+    cv2.waitKey(int(delay))
 class WaggleDecoder():
 
     def __init__(self, fps, bee_length):
@@ -324,6 +350,16 @@ class WaggleDecoder():
         fourier_angle = self.calculate_angle_from_filtered_fourier(filtered_fourier)
         
         positional_angle = self.estimate_angle_from_moments(difference_images, waggle_regions)
+
+        """for idx in range(images.shape[0]):
+            angle = (fourier_angle, positional_angle)
+            if waggle_begin is not None:
+                if idx < waggle_begin or idx > waggle_end:
+                    angle = None
+
+            debug_display_img(images[idx], delay=40, angles=angle)
+            """
+        
         corrected_angle = fourier_angle
         if positional_angle is not None and not np.isnan(positional_angle):
             corrected_angle = self.correct_angle_direction(corrected_angle, positional_angle)

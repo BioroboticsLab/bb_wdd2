@@ -89,6 +89,7 @@ def run_wdd(
 
     dd = FrequencyDetector(height=height, width=width, fps=fps)
     waggle_metadata_saver, external_interface = None, None
+    waggle_serializer = None
     if export_steps is None:
         export_steps = [WaggleDecoder(fps=fps, bee_length=bee_length)]
         if ipc:
@@ -99,7 +100,8 @@ def run_wdd(
             from wdd.evaluation import WaggleMetadataSaver
             waggle_metadata_saver = WaggleMetadataSaver()
             export_steps.append(waggle_metadata_saver)
-        export_steps.append(WaggleSerializer(cam_id=cam_identifier, output_path=output_path))
+        waggle_serializer = WaggleSerializer(cam_id=cam_identifier, output_path=output_path)
+        export_steps.append(waggle_serializer)
 
     exporter = WaggleExportPipeline(
         cam_id=cam_identifier,
@@ -221,6 +223,7 @@ def run_wdd(
         # Wait for all remaining data to be written.
         print("\nSaving running exports..", flush=True)
         exporter.finalize_exports()
+        waggle_serializer.finalize_serialization()
 
     if waggle_metadata_saver is not None:
         import wdd.evaluation
