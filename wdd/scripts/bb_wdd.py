@@ -83,6 +83,12 @@ def show_default_option(*args, **kwargs):
     default=None,
     help="Specify a region of interest in pixels in the original video. The four arguments are 'left, top, width, height'."
 )
+@click.option(
+    "--ipc",
+    type=str,
+    default=None,
+    help="Socket address to send out detections to (e.g. 'localhost:9901:password')."
+)
 def main(
     bee_length,
     autoopt,
