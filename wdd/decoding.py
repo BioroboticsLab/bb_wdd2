@@ -79,6 +79,12 @@ class WaggleDecoder():
     def __init__(self, fps, bee_length):
         self.fps = fps
         self.bee_length = bee_length
+        self.scaled_bee_length = 20.0
+        if self.bee_length > self.scaled_bee_length:
+            self.rescale_factor = self.scaled_bee_length / self.bee_length
+        else:
+            self.rescale_factor = 1.0
+            self.scaled_bee_length = self.bee_length
 
         self.fourier_filtering_kernel = None
         self.wavelets = None
@@ -98,9 +104,17 @@ class WaggleDecoder():
         assert diff_images.shape[1] == images.shape[1]
 
         kernel_size = int(self.bee_length / 8.0)
-        filter_output = np.zeros(shape=diff_images.shape, dtype=np.float32)
+        filter_output = np.zeros(shape=(diff_images.shape[1], diff_images.shape[2], diff_images.shape[0]), dtype=np.float32)
         for i in range(diff_images.shape[0]):
-            skimage.filters.gaussian(diff_images[i], sigma=kernel_size, output=filter_output[i])
+            skimage.filters.gaussian(diff_images[i], sigma=kernel_size, output=filter_output[:, :, i])
+
+        if self.rescale_factor < 1.0:
+            filter_output = skimage.transform.rescale(filter_output,
+                            scale=self.rescale_factor,
+                            anti_aliasing=False,
+                            multichannel=True)
+        filter_output = np.moveaxis(filter_output, 2, 0)
+
         return filter_output
 
     def accumulate_fourier_transform(self, diff_images):
@@ -166,7 +180,7 @@ class WaggleDecoder():
 
         if self.fourier_filtering_kernel is None:
             kernel_size = fourier.shape[0]
-            self.fourier_filtering_kernel = self.mexican_hat_2d(kernel_size, sigma1=int(6 * self.bee_length), sigma2=int(self.bee_length))
+            self.fourier_filtering_kernel = self.mexican_hat_2d(kernel_size, sigma1=int(3 * self.scaled_bee_length), sigma2=int(0.5 * self.scaled_bee_length))
             self.fourier_filtering_kernel = np.abs(np.fft.fftshift(np.fft.fft2(self.fourier_filtering_kernel)))
 
         filtered = np.power(np.multiply(fourier, self.fourier_filtering_kernel), 5.0)
@@ -286,7 +300,7 @@ class WaggleDecoder():
         for idx in range(waggle_regions.shape[0]):
             img = waggle_regions[idx]
             
-            kernel_size = self.bee_length / 2.0
+            kernel_size = self.scaled_bee_length / 2.0
             skimage.filters.gaussian(img * main_waggle_region, sigma=kernel_size, output=filter_output)
 
             crop_width = int(kernel_size)
@@ -300,12 +314,18 @@ class WaggleDecoder():
 
         if points.shape[0] > 4:
             points = points[points[:, 2] >= np.median(points[:, 2])]
+        else:
+            if points.shape[0] < 2:
+                return None
         points = points[:, :2]
         first_half, second_half = points[:(points.shape[0] // 2)], points[(points.shape[0] // 2):]
 
         all_vectors = second_half[:, None, :] - first_half
         all_vectors = all_vectors.reshape(-1, 2)
-        all_vectors /= np.linalg.norm(all_vectors, axis=0)
+        norms = np.linalg.norm(all_vectors, axis=1)
+        valid = norms > 0e-3
+        all_vectors = all_vectors[valid, :] / norms[valid, None]
+
         ransac = sklearn.linear_model.RANSACRegressor()
         try:
             ransac.fit(all_vectors[:, :1], all_vectors[:, 1])
