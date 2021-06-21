@@ -13,6 +13,7 @@ import numba
 import scipy.signal
 import scipy.stats
 import skimage.filters
+import sklearn.linear_model
 
 
 @numba.njit
@@ -49,8 +50,9 @@ def largest_consecutive_region(a):
     
 class WaggleDecoder():
 
-    def __init__(self):
-        pass
+    def __init__(self, fps, bee_length):
+        self.fps = fps
+        self.bee_length = bee_length
 
     def create_difference_images(self, images):
         """
@@ -62,12 +64,13 @@ class WaggleDecoder():
         assert images.shape[0] > 0
         assert images.shape[1] == images.shape[2]
         
-        smoothing_kernel = np.ones(shape=(3, 3), dtype=np.float32) / 9.0
         diff_images = np.diff(images, axis=0)
         assert diff_images.shape[0] == images.shape[0] - 1
         assert diff_images.shape[1] == images.shape[1]
 
-        diff_images = np.stack(list(map(lambda m: scipy.signal.convolve2d(m, smoothing_kernel, mode='same'), diff_images)))
+        kernel_size = int(self.bee_length / 8.0)
+        diff_images = map(lambda m: skimage.filters.gaussian(m, sigma=kernel_size), diff_images)
+        diff_images = np.stack(list(diff_images))
         return diff_images
 
     def accumulate_fourier_transform(self, diff_images):
@@ -131,7 +134,7 @@ class WaggleDecoder():
         """
         assert fourier.shape[0] == fourier.shape[1] # Not 100% sure if necessary.
         kernel_size = fourier.shape[0]
-        kernel = self.mexican_hat_2d(kernel_size, sigma1=30, sigma2=4)
+        kernel = self.mexican_hat_2d(kernel_size, sigma1=int(6 * self.bee_length), sigma2=int(self.bee_length))
         fourier_kernel = np.abs(np.fft.fftshift(np.fft.fft2(kernel)))
         filtered = np.power(np.multiply(fourier, fourier_kernel), 5.0)
         return filtered
@@ -166,21 +169,20 @@ class WaggleDecoder():
         Returns:
             correlations: np.array shape number, height, width
         """
-        s, w = 0.5, 10.0
+        s, w = 0.25, 15.0
         M = int(2*s*w*samplerate / hz)
         wavelet = scipy.signal.morlet(M, w, s, complete=False)
-        
+        wavelet = np.real(wavelet).astype(np.float32)
+        wavelet /= np.abs(wavelet).max()
+
         wavelet = wavelet.reshape(wavelet.shape[0], 1, 1)
 
-        corr = np.real(scipy.ndimage.convolve(images, wavelet))
-        corr2 = np.real(scipy.ndimage.convolve(images, -wavelet))
-        corr = np.stack((corr, corr2))
-        corr = np.max(corr, axis=0)
-        
+        corr = scipy.ndimage.convolve(images, wavelet)
+        corr = np.abs(corr)
         return corr
 
     def estimate_waggle_begin_end(self, difference_images):
-        """Takes a set of first-order differences images of a 60hz recording and estimates the begin and end of a contained waggle run.
+        """Takes a set of first-order differences images of a recording and estimates the begin and end of a contained waggle run.
         Also returns the regions of activity of the first and second half of the waggle..
 
         Arguments:
@@ -189,23 +191,25 @@ class WaggleDecoder():
         Returns:
             ((int, int), (np.array, np.array)) or ((None, None), None)
         """
-        corr = self.get_correlation_with_frequency(difference_images, 12, samplerate=60) \
-                + self.get_correlation_with_frequency(difference_images, 15, samplerate=60)
+        difference_images = difference_images - difference_images.mean()
+        difference_images /= (np.abs(difference_images).max() + 0e-4)
+        difference_images /= 3.0 # N frequencies
 
+        corr = self.get_correlation_with_frequency(difference_images, 12, samplerate=self.fps) \
+                + self.get_correlation_with_frequency(difference_images, 13, samplerate=self.fps) \
+                + self.get_correlation_with_frequency(difference_images, 14, samplerate=self.fps)
+        
         activations = np.mean(corr, axis=(1, 2))
-        activations /= np.abs(difference_images).mean()
-        activations = scipy.ndimage.maximum_filter1d(activations, 10)
+        
+        activations = scipy.ndimage.maximum_filter1d(activations, int(self.fps/6))
         t = skimage.filters.threshold_otsu(activations)
 
-        t = 5.0 # 5% percentile of otsu thresholds of global population.
         a = activations > t
         begin, end = largest_consecutive_region(a)
         if begin is None:
             return (None, None), None
-        length = end - begin
-        first_half_location = np.mean(corr[begin:(begin+length//2)], axis=0) 
-        second_half_location = np.mean(corr[(end-length//2):end], axis=0)
-        return (begin, end), (first_half_location, second_half_location)
+        corr = corr[begin:end]
+        return (begin, end), corr
 
     def estimate_angle_from_moments(self, difference_images, waggle_regions):
         """Takes an array of first-order difference images and a heatmap of likely waggle regions.
@@ -220,32 +224,39 @@ class WaggleDecoder():
             angle: float
             Can be np.nan.
         """
-        length = difference_images.shape[0]
-        if length < 6:
-            return np.nan
 
-        points = np.zeros(shape=(2, 2))
-        N = length // 3
-        for idx in range(2):
-            if idx == 0:
-                diff_images = difference_images[0:N]
-            else:
-                diff_images = difference_images[(length-N):]
-            # Calculate the total motion activity in the image.
-            diff_images = np.sum(np.abs(diff_images), axis=0)
-            # And focus on the waggle region.
-            if waggle_regions is not None:
-                diff_images *= waggle_regions[idx]
-            # Make image moment concentrate more on the highest activity regions.
-            diff_images = np.power(diff_images, 5)
-            moments = cv2.moments(diff_images)
-            cx, cy = moments["m10"] / moments["m00"], moments["m01"] / moments["m00"]
-            points[idx, :] = (cx, cy)
+        points = np.zeros(shape=(waggle_regions.shape[0], 3))
+        main_waggle_region = np.mean(waggle_regions, axis=0)
+        for idx in range(waggle_regions.shape[0]):
+            img = waggle_regions[idx]
             
-        direction = points[1] - points[0]
+            kernel_size = self.bee_length / 2.0
+            img = skimage.filters.gaussian(img * main_waggle_region, sigma=kernel_size)
+            crop_width = int(kernel_size)
+            img = img[crop_width:-crop_width, crop_width:-crop_width]
+
+            cy, cx = np.unravel_index(np.argmax(img), img.shape)
+            cmax = img[cy, cx]
+
+            points[idx, :] = (cx, cy, cmax)
+
+
+        if points.shape[0] > 4:
+            points = points[points[:, 2] >= np.median(points[:, 2])]
+        points = points[:, :2]
+        first_half, second_half = points[:(points.shape[0] // 2)], points[(points.shape[0] // 2):]
+
+        all_vectors = second_half[:, None, :] - first_half
+        all_vectors = all_vectors.reshape(-1, 2)
+        all_vectors /= np.linalg.norm(all_vectors, axis=0)
+        ransac = sklearn.linear_model.RANSACRegressor()
+        try:
+            ransac.fit(all_vectors[:, :1], all_vectors[:, 1])
+            direction = np.median(all_vectors[ransac.inlier_mask_], axis=0)
+        except ValueError as e:
+            return None
         # Image coordinate system is upside down.
-        angle = np.arctan2(-direction[1], direction[0])
-        
+        angle = -np.arctan2(direction[1], direction[0])
         return angle
 
     def correct_angle_direction(self, main_angle, orientation_angle):    
@@ -283,7 +294,7 @@ class WaggleDecoder():
         
         positional_angle = self.estimate_angle_from_moments(difference_images, waggle_regions)
         corrected_angle = fourier_angle
-        if not np.isnan(positional_angle):
+        if positional_angle is not None and not np.isnan(positional_angle):
             corrected_angle = self.correct_angle_direction(corrected_angle, positional_angle)
         corrected_angle = corrected_angle % (2*np.pi)
         return corrected_angle, waggle_length
@@ -294,8 +305,10 @@ class WaggleDecoder():
         # Make the length serializable to JSON.
         if np.isnan(length):
             length = None
-
+        else:
+            length = length / self.fps
+            
         metadata_dict["waggle_angle"] = angle
-        metadata_dict["waggle_length"] = length
+        metadata_dict["waggle_duration"] = length
 
         return waggle, full_frame_rois, metadata_dict, kwargs
