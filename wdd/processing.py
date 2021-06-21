@@ -13,7 +13,7 @@ from wdd.datastructures import Waggle
 
 import numba
 
-@numba.njit(parallel=True, cache=True)
+@numba.njit(parallel=True, cache=True, nogil=True)
 def normalize_rolling_buffer_online(rolling_mean, buffer, output_buffer):
     """
     Takes a current mean and an image buffer (n_images, height, width).
@@ -39,7 +39,7 @@ def normalize_rolling_buffer_online(rolling_mean, buffer, output_buffer):
             for z in range(buffer.shape[0]):
                 output_buffer[z, y, x] = (buffer[z, y, x] - current_buffer_mean) / pixel_max
 
-@numba.njit(parallel=True, cache=True)
+@numba.njit(parallel=True, cache=True, nogil=True)
 def apply_wavelets(wavelets, normalized_frame_buffer, output):
     """
     Multiply wavelets onto normalized frame buffer and sum over the absolute responses.
@@ -59,7 +59,7 @@ def apply_wavelets(wavelets, normalized_frame_buffer, output):
 
             output[y, x] = pixel_sum / n_wavelets
 
-@numba.njit(parallel=True, cache=True)
+@numba.njit(parallel=True, cache=True, nogil=True)
 def post_process_response(frame_response, fps, activity, activity_long, activity_decay, activity_long_decay, output):
     """
     Post process responses by updating high-pass filter.
