@@ -233,6 +233,7 @@ class WaggleDetector:
                         ts=[frame_idx],
                         camera_timestamps=[waggle_timestamp],
                         responses=[waggle_info[2]],
+                        system_timestamp=datetime.utcnow()
                     )
                 )
             return
@@ -295,6 +296,7 @@ class WaggleDetector:
                         ts=[frame_idx],
                         camera_timestamps=[waggle_timestamp],
                         responses=[waggle_info[2]],
+                        system_timestamp=datetime.utcnow()
                     )
                 )
 
