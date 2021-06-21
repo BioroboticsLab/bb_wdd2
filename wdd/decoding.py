@@ -16,7 +16,7 @@ import skimage.filters
 import sklearn.linear_model
 
 
-@numba.njit
+@numba.njit(cache=True, nogil=True)
 def largest_consecutive_region(a):
     """Calculate the largest consecutive region of a boolean array.
 
@@ -54,6 +54,9 @@ class WaggleDecoder():
         self.fps = fps
         self.bee_length = bee_length
 
+        self.fourier_filtering_kernel = None
+        self.wavelets = None
+
     def create_difference_images(self, images):
         """
             Arguments:
@@ -69,9 +72,10 @@ class WaggleDecoder():
         assert diff_images.shape[1] == images.shape[1]
 
         kernel_size = int(self.bee_length / 8.0)
-        diff_images = map(lambda m: skimage.filters.gaussian(m, sigma=kernel_size), diff_images)
-        diff_images = np.stack(list(diff_images))
-        return diff_images
+        filter_output = np.zeros(shape=diff_images.shape, dtype=np.float32)
+        for i in range(diff_images.shape[0]):
+            skimage.filters.gaussian(diff_images[i], sigma=kernel_size, output=filter_output[i])
+        return filter_output
 
     def accumulate_fourier_transform(self, diff_images):
         """Applies the fast fourier transform over a 3D matrix of images
@@ -133,10 +137,13 @@ class WaggleDecoder():
             filtered: np.array of shape (W, H)
         """
         assert fourier.shape[0] == fourier.shape[1] # Not 100% sure if necessary.
-        kernel_size = fourier.shape[0]
-        kernel = self.mexican_hat_2d(kernel_size, sigma1=int(6 * self.bee_length), sigma2=int(self.bee_length))
-        fourier_kernel = np.abs(np.fft.fftshift(np.fft.fft2(kernel)))
-        filtered = np.power(np.multiply(fourier, fourier_kernel), 5.0)
+
+        if self.fourier_filtering_kernel is None:
+            kernel_size = fourier.shape[0]
+            self.fourier_filtering_kernel = self.mexican_hat_2d(kernel_size, sigma1=int(6 * self.bee_length), sigma2=int(self.bee_length))
+            self.fourier_filtering_kernel = np.abs(np.fft.fftshift(np.fft.fft2(self.fourier_filtering_kernel)))
+
+        filtered = np.power(np.multiply(fourier, self.fourier_filtering_kernel), 5.0)
         return filtered
 
     def calculate_angle_from_filtered_fourier(self, filtered_fourier):
@@ -156,18 +163,14 @@ class WaggleDecoder():
         angle = -np.arctan2(v[1][eigenvector_idx], v[0][eigenvector_idx])
         return angle
 
-    def get_correlation_with_frequency(self, images, hz, samplerate):
-        """Takes a 3D array of images (number, height, width) and calculates each pixels' activation with morlet wavelet corresponding to a certain frequency.
+    def get_wavelet(self, hz, samplerate):
+        """Calculates a short morlet wavelet that corresponds to a given frequency at a given samplerate.
 
         Arguments:
-            images: np.array shape number, height, width
             hz: float
                 Frequency of the morlet wavelet.
             samplerate: float
                 Samplerate of the original images.
-        
-        Returns:
-            correlations: np.array shape number, height, width
         """
         s, w = 0.25, 15.0
         M = int(2*s*w*samplerate / hz)
@@ -176,6 +179,20 @@ class WaggleDecoder():
         wavelet /= np.abs(wavelet).max()
 
         wavelet = wavelet.reshape(wavelet.shape[0], 1, 1)
+
+        return wavelet
+
+    def get_correlation_with_wavelet(self, images, wavelet):
+        """Takes a 3D array of images (number, height, width) and calculates each pixels' activation with morlet wavelet corresponding to a certain frequency.
+
+        Arguments:
+            images: np.array shape number, height, width
+            wavelet: np.array shape d, 1, 1
+                Where d < number
+        
+        Returns:
+            correlations: np.array shape number, height, width
+        """
 
         corr = scipy.ndimage.convolve(images, wavelet)
         corr = np.abs(corr)
@@ -191,13 +208,24 @@ class WaggleDecoder():
         Returns:
             ((int, int), (np.array, np.array)) or ((None, None), None)
         """
+        
+        if self.wavelets is None:
+            self.wavelets = []
+            for freq in (12, 13, 14):
+                wavelet = self.get_wavelet(freq, self.fps)
+                self.wavelets.append(wavelet)
+        
         difference_images = difference_images - difference_images.mean()
         difference_images /= (np.abs(difference_images).max() + 0e-4)
-        difference_images /= 3.0 # N frequencies
+        difference_images /= len(self.wavelets)
 
-        corr = self.get_correlation_with_frequency(difference_images, 12, samplerate=self.fps) \
-                + self.get_correlation_with_frequency(difference_images, 13, samplerate=self.fps) \
-                + self.get_correlation_with_frequency(difference_images, 14, samplerate=self.fps)
+        corr = None
+        for wavelet in self.wavelets:
+            wavelet_corr = self.get_correlation_with_wavelet(difference_images, wavelet)
+            if corr is None:
+                corr = wavelet_corr
+            else:
+                corr += wavelet_corr
         
         activations = np.mean(corr, axis=(1, 2))
         
@@ -227,13 +255,16 @@ class WaggleDecoder():
 
         points = np.zeros(shape=(waggle_regions.shape[0], 3))
         main_waggle_region = np.mean(waggle_regions, axis=0)
+        filter_output = np.zeros(shape=waggle_regions[0].shape, dtype=np.float32)
+
         for idx in range(waggle_regions.shape[0]):
             img = waggle_regions[idx]
             
             kernel_size = self.bee_length / 2.0
-            img = skimage.filters.gaussian(img * main_waggle_region, sigma=kernel_size)
+            skimage.filters.gaussian(img * main_waggle_region, sigma=kernel_size, output=filter_output)
+
             crop_width = int(kernel_size)
-            img = img[crop_width:-crop_width, crop_width:-crop_width]
+            img = filter_output[crop_width:-crop_width, crop_width:-crop_width]
 
             cy, cx = np.unravel_index(np.argmax(img), img.shape)
             cmax = img[cy, cx]
