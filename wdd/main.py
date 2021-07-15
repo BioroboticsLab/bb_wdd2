@@ -61,9 +61,14 @@ def run_wdd(
         roi = None
 
     video_writer = None
+    record_input, record_output = False, False
     if record_video:
         print("Recording to file in current working directory instead of processing (codec = '{}')...".format(record_video))
         video_writer = VideoWriter(str(video_device), fps, record_video)
+        if debug:
+            record_output = True
+        else:
+            record_input = True
 
     subsample = int(subsample)
     if subsample > 1:
@@ -180,7 +185,7 @@ def run_wdd(
                     print("Unable to retrieve frame from video device")
                     break
 
-                if video_writer is not None:
+                if record_input:
                     video_writer.write(frame_orig)
                 else:
 
@@ -229,8 +234,12 @@ def run_wdd(
                         activity_im = (activity_im * 255.0).astype(np.uint8)
                         activity_im = cv2.applyColorMap(activity_im, cv2.COLORMAP_VIRIDIS)
                         im = cv2.addWeighted(im, 0.25, activity_im, 0.75, 0)
-                        cv2.imshow("WDD", im)
-                        cv2.waitKey(1)
+
+                        if record_output:
+                            video_writer.write(im)
+                        else:
+                            cv2.imshow("WDD", im)
+                            cv2.waitKey(1)
 
                 if frame_idx > 0 and (frame_idx % fps == 0):
                     end_time = time.time()
