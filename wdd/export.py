@@ -27,7 +27,14 @@ class VideoWriter:
             else:
                 fourcc = cv2.VideoWriter_fourcc(*self.codec)
             self.is_color = len(image.shape) > 2 and image.shape[2] > 1
-            self.writer = cv2.VideoWriter("WDD_Recording_" + self.device_name + "_" + datetime.utcnow().isoformat() + "+00.avi",
+            current_datetime = datetime.utcnow().isoformat().replace(":", "_")
+            mangled_device_name = self.device_name
+            if "/" in mangled_device_name or "\\" in mangled_device_name:
+                mangled_device_name = mangled_device_name.replace("\\", "/")
+                mangled_device_name = mangled_device_name.split("/")[-1]
+            output_video_name = "WDD_Recording_" + mangled_device_name + "_" + current_datetime + "+00.avi"
+            print("Creating output video {}.".format(output_video_name))
+            self.writer = cv2.VideoWriter(output_video_name,
                             fourcc,
                             int(self.fps),
                             (image.shape[1], image.shape[0]),
