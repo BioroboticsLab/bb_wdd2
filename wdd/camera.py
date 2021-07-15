@@ -247,12 +247,15 @@ class Flea3CapturePySpin(Camera):
         super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp,
                         roi=None) # Don't pass on ROI. Use the camera feature instead.
 
-        try:
-            device = int(device)
-        except:
-            pass
         self.device = device
-        self.camera = simple_pyspin.Camera(index=self.device)
+        self.camera = None
+        try:
+            self.camera = simple_pyspin.Camera(index=str(self.device))
+        except:
+            print("Could not open camera by serial number.. Trying by index.")
+
+        if self.camera is None:
+            self.camera = simple_pyspin.Camera(index=int(self.device))
 
         self.camera.PixelFormat = "MONO8"
 
