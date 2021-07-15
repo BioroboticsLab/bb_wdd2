@@ -54,11 +54,11 @@ def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length, verbose=T
     decoding_results = []
     waggles_df = pandas.DataFrame(waggles_df)
     hits = []
-    matched_waggles = np.zeros(shape=(waggles_df.shape[0],), dtype=np.bool)
 
     if waggles_df.shape[0] > 0:
 
         waggles_df = waggles_df[waggles_df.end < ground_truth_df.end_ts.max()]
+        matched_waggles = np.zeros(shape=(waggles_df.shape[0],), dtype=np.bool)
 
         for x0, y0, x1, y1, dt_begin, dt_end in ground_truth_df[["origin_x", "origin_y",
                                                             "end_x", "end_y",
@@ -108,6 +108,8 @@ def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length, verbose=T
             hits.append(1)
         
         waggles_df["TP"] = matched_waggles
+    else:
+        matched_waggles = np.array([], dtype=np.bool)
         
     hits = np.array(hits, dtype=np.float32)
 
