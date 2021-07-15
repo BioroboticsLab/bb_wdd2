@@ -208,7 +208,8 @@ def run_wdd(
                         if im.max() < 1.0 + 1e-5:
                             im = im * 255.0
                         im = im.astype(np.uint8)
-                        im = np.repeat(im[:, :, None], 3, axis=2)
+                        if len(im.shape) == 2:
+                            im = np.repeat(im[:, :, None], 3, axis=2)
                         # Scale image range robustly.
                         activity_min = activity.min()
                         if activity_norm[0] > activity_min:
@@ -252,7 +253,8 @@ def run_wdd(
         # Wait for all remaining data to be written.
         print("\nSaving running exports..", flush=True)
         exporter.finalize_exports()
-        waggle_serializer.finalize_serialization()
+        if waggle_serializer is not None:
+            waggle_serializer.finalize_serialization()
 
     if waggle_metadata_saver is not None:
         import wdd.evaluation
