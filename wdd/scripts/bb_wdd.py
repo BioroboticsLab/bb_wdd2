@@ -89,6 +89,12 @@ def show_default_option(*args, **kwargs):
     default=None,
     help="Socket address to send out detections to (e.g. 'localhost:9901:password')."
 )
+@click.option(
+    "--record_video",
+    type=str,
+    default=None,
+    help="Specify the OpenCV FourCC code to record a video to instead of processing (e.g. 'HFYU' or 'png ')."
+)
 def main(
     bee_length,
     autoopt,

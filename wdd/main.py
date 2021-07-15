@@ -10,7 +10,7 @@ import numpy as np
 
 from wdd.camera import OpenCVCapture, Flea3Capture, Flea3CapturePySpin, cam_generator
 from wdd.processing import FrequencyDetector, WaggleDetector
-from wdd.export import WaggleSerializer, WaggleExportPipeline
+from wdd.export import WaggleSerializer, WaggleExportPipeline, VideoWriter
 from wdd.decoding import WaggleDecoder
 
 def run_wdd(
@@ -35,7 +35,8 @@ def run_wdd(
     verbose=True,
     export_steps=None,
     eval="",
-    ipc=None
+    ipc=None,
+    record_video=None
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -58,6 +59,11 @@ def run_wdd(
         height = int(roi[3])
     else:
         roi = None
+
+    video_writer = None
+    if record_video:
+        print("Recording to file in current working directory instead of processing (codec = '{}')...".format(record_video))
+        video_writer = VideoWriter(str(video_device), fps, record_video)
 
     subsample = int(subsample)
     if subsample > 1:
@@ -161,7 +167,8 @@ def run_wdd(
         generator_context = contextlib.nullcontext(frame_generator)
     
     processing_fps = None
-
+    activity = np.array([np.nan])
+    activity_norm = [+np.inf, -np.inf]
     try:
             
         with generator_context as gen:
@@ -173,45 +180,65 @@ def run_wdd(
                     print("Unable to retrieve frame from video device")
                     break
 
-                full_frame_buffer[frame_idx % full_frame_buffer_len] = frame_orig
-                datetime_buffer[frame_idx % full_frame_buffer_len] = timestamp
+                if video_writer is not None:
+                    video_writer.write(frame_orig)
+                else:
 
-                activity = dd.process(frame)
-                if activity is not None:
-                    wd.process(frame_idx, activity)
+                    full_frame_buffer[frame_idx % full_frame_buffer_len] = frame_orig
+                    datetime_buffer[frame_idx % full_frame_buffer_len] = timestamp
 
-                if debug and frame_idx % debug_frames == 0:
-                    current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
-                    current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.current_waggles]
-                    for blob_index, ((y, x), nd) in enumerate(
-                        zip(current_waggle_positions, current_waggle_num_detections)
-                    ):
-                        cv2.circle(
-                            frame_orig,
-                            (int(x * frame_scale[0]), int(y * frame_scale[1])),
-                            10,
-                            (0, 0, 255),
-                            2,
-                        )
+                    activity = dd.process(frame)
+                    if activity is not None:
+                        wd.process(frame_idx, activity)
 
-                    im = (frame_orig * 255).astype(np.uint8)
-                    im = np.repeat(im[:, :, None], 3, axis=2)
-                    activity_im = (activity - activity.min())
-                    activity_im /= activity_im.max()
-                    activity_im = skimage.transform.resize(activity_im, im.shape[:2])
-                    activity_im = (activity_im * 255.0).astype(np.uint8)
-                    activity_im = cv2.applyColorMap(activity_im, cv2.COLORMAP_VIRIDIS)
-                    im = cv2.addWeighted(im, 0.25, activity_im, 0.75, 0)
-                    cv2.imshow("WDD", im)
-                    cv2.waitKey(1)
+                    if debug and frame_idx % debug_frames == 0:
+                        current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
+                        current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.current_waggles]
+                        for blob_index, ((y, x), nd) in enumerate(
+                            zip(current_waggle_positions, current_waggle_num_detections)
+                        ):
+                            cv2.circle(
+                                frame_orig,
+                                (int(x * frame_scale[0]), int(y * frame_scale[1])),
+                                10,
+                                (0, 0, 255),
+                                2,
+                            )
+                        im = frame_orig
+                        if im.max() < 1.0 + 1e-5:
+                            im = im * 255.0
+                        im = im.astype(np.uint8)
+                        im = np.repeat(im[:, :, None], 3, axis=2)
+                        # Scale image range robustly.
+                        activity_min = activity.min()
+                        if activity_norm[0] > activity_min:
+                            activity_norm[0] = activity_min
+                        else:
+                            activity_norm[0] = (0.9 * activity_norm[0]) + 0.1 * activity_min
+                        activity_im = (activity - activity_norm[0])
+
+                        activity_max = activity.max()
+                        if activity_norm[1] < activity_max:
+                            activity_norm[1] = activity_max
+                        else:
+                            activity_norm[1] = (0.9 * activity_norm[1]) + 0.1 * activity_max
+                        activity_im /= activity_norm[1]
+                        
+                        activity_im = skimage.transform.resize(activity_im, im.shape[:2])
+                        activity_im = (activity_im * 255.0).astype(np.uint8)
+                        activity_im = cv2.applyColorMap(activity_im, cv2.COLORMAP_VIRIDIS)
+                        im = cv2.addWeighted(im, 0.25, activity_im, 0.75, 0)
+                        cv2.imshow("WDD", im)
+                        cv2.waitKey(1)
 
                 if frame_idx > 0 and (frame_idx % fps == 0):
                     end_time = time.time()
                     processing_fps = ((frame_idx % 10000) + 1) / (end_time - start_time)
                     if verbose:
+                        what = "processing" if not video_writer else "recording"
                         sys.stdout.write(
-                            "\rCurrently processing with FPS: {:.1f} | Max DD: {:.2f} | [{:16s} {}]".format(
-                                processing_fps, np.log1p(activity.max()), cam_identifier, video_device
+                            "\rCurrently {} with FPS: {:.1f} | Max DD: {:.2f} | [{:16s} {}]".format(
+                                what, processing_fps, np.log1p(activity.max()), cam_identifier, video_device
                             )
                         )
                         sys.stdout.flush()
@@ -220,6 +247,8 @@ def run_wdd(
     finally:
         if external_interface is not None:
             external_interface.close()
+        if video_writer is not None:
+            video_writer.close()
         # Wait for all remaining data to be written.
         print("\nSaving running exports..", flush=True)
         exporter.finalize_exports()

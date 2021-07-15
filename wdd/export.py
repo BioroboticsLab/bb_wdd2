@@ -8,6 +8,40 @@ import imageio
 import queue
 import threading
 
+class VideoWriter:
+    def __init__(self, device_name, fps, codec):
+        self.writer = None
+        self.device_name = device_name
+        self.codec = codec
+        self.fps = fps
+        self.is_color = None
+
+    def write(self, image):
+        if image is None:
+            return
+
+        if self.writer is None:
+            import cv2
+            if len(self.codec) != 4:
+                fourcc = -1
+            else:
+                fourcc = cv2.VideoWriter_fourcc(*self.codec)
+            self.is_color = len(image.shape) > 2 and image.shape[2] > 1
+            self.writer = cv2.VideoWriter("WDD_Recording_" + self.device_name + "_" + datetime.utcnow().isoformat() + "+00.avi",
+                            fourcc,
+                            int(self.fps),
+                            (image.shape[1], image.shape[0]),
+                            self.is_color)
+        
+        if not self.is_color and len(image.shape) > 2:
+            image = image[:, :, 0]
+        self.writer.write(image)
+
+    def close(self):
+        if self.writer is not None:
+            self.writer.release()
+
+
 class WaggleSerializer:
     def __init__(
         self,
