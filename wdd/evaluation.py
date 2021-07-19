@@ -71,16 +71,22 @@ def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length, verbose=T
             p = bee_length
             x0, x1 = min(x0, x1), max(x0, x1)
             y0, y1 = min(y0, y1), max(y0, y1)
-            waggles = waggles_df
-            waggles = waggles[waggles_df.x.between(x0 - p, x1 + p).values & waggles_df.y.between(y0 - p, y1 + p).values]
-            waggles = waggles[~(waggles.start > dt_end).values & ~(waggles.end < dt_begin).values]
+            waggles = waggles_df[~matched_waggles]
+            waggles = waggles[waggles.x.between(x0 - p, x1 + p).values & waggles.y.between(y0 - p, y1 + p).values]
+            waggles = waggles[(~(waggles.start > dt_end).values & ~(waggles.end < dt_begin).values)]
             if waggles.shape[0] == 0:
                 hits.append(0)
                 continue
             elif waggles.shape[0] > 1:
                 if verbose:
                     print("Found more than one waggle for GT.")
-            
+                waggles_midpoint = (waggles.start + waggles.duration / 2.0)
+                gt_midpoint = (dt_begin + (dt_end - dt_begin) / 2.0)
+                offset = (waggles_midpoint - gt_midpoint).apply(lambda d: d.total_seconds()).values.abs()
+                best_match_idx = np.argmin(offset)
+                waggles = waggles.iloc[best_match_idx:(best_match_idx+1), :]
+
+            assert waggles.shape[0] == 1
             gt_duration = (dt_end - dt_begin).total_seconds()
             
 
