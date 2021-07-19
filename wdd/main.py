@@ -197,19 +197,23 @@ def run_wdd(
                         wd.process(frame_idx, activity)
 
                     if debug and frame_idx % debug_frames == 0:
+                        im = frame_orig.copy()
                         current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
                         current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.current_waggles]
                         for blob_index, ((y, x), nd) in enumerate(
                             zip(current_waggle_positions, current_waggle_num_detections)
                         ):
+                            offset_x, offset_y = 0, 0
+                            if roi is not None:
+                                offset_x, offset_y = roi[:2]
                             cv2.circle(
-                                frame_orig,
-                                (int(x * frame_scale[0]), int(y * frame_scale[1])),
+                                im,
+                                (int(x * frame_scale[0] + offset_x), int(y * frame_scale[1] + offset_y)),
                                 10,
                                 (0, 0, 255),
                                 2,
                             )
-                        im = frame_orig
+                        
                         if im.max() < 1.0 + 1e-5:
                             im = im * 255.0
                         im = im.astype(np.uint8)
@@ -230,9 +234,18 @@ def run_wdd(
                             activity_norm[1] = (0.9 * activity_norm[1]) + 0.1 * activity_max
                         activity_im /= activity_norm[1]
                         
-                        activity_im = skimage.transform.resize(activity_im, im.shape[:2])
+                        h, w = height, width
+                        if subsample > 1:
+                            h, w = h * subsample, w * subsample
+                        activity_im = skimage.transform.resize(activity_im, (h, w))
+                        if roi is not None:
+                            activity_im = np.pad(activity_im,
+                                        ((roi[1], im.shape[0] - h - roi[1]),
+                                        (roi[0], im.shape[1] - w - roi[0])))
                         activity_im = (activity_im * 255.0).astype(np.uint8)
                         activity_im = cv2.applyColorMap(activity_im, cv2.COLORMAP_VIRIDIS)
+                        # Due to rounding, the activity image can be a few pixels larger than the 'normal' image now.
+                        activity_im = activity_im[0:im.shape[0], 0:im.shape[1], :]
                         im = cv2.addWeighted(im, 0.25, activity_im, 0.75, 0)
 
                         if record_output:
