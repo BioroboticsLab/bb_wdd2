@@ -5,3 +5,4 @@ multiprocessing_generator>=0.2
 click>=6.7
 iso8601>=0.1.12
 imageio>=2.3.0
+hyperopt
