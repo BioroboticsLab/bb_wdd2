@@ -23,12 +23,14 @@ def generate_64bit_id():
     return hash
 
 class VideoWriter:
-    def __init__(self, device_name, fps, codec):
+    def __init__(self, device_name, fps, codec, directory="./", prefix="WDD_Recording_"):
         self.writer = None
         self.device_name = device_name
         self.codec = codec
         self.fps = fps
         self.is_color = None
+        self.directory = directory
+        self.prefix = prefix
 
     def write(self, image):
         if image is None:
@@ -46,7 +48,7 @@ class VideoWriter:
             if "/" in mangled_device_name or "\\" in mangled_device_name:
                 mangled_device_name = mangled_device_name.replace("\\", "/")
                 mangled_device_name = mangled_device_name.split("/")[-1]
-            output_video_name = "WDD_Recording_" + mangled_device_name + "_" + current_datetime + "+00.avi"
+            output_video_name = self.directory + "/" + self.prefix + mangled_device_name + "_" + current_datetime + "+00.avi"
             print("Creating output video {}.".format(output_video_name))
             self.writer = cv2.VideoWriter(output_video_name,
                             fourcc,
