@@ -150,7 +150,7 @@ def run_wdd(
         subsample=subsample,
         fps=fps,
         device=video_device,
-        fullframe_path=None,
+        fullframe_path=fullframe_path,
         cam_identifier=cam_identifier,
         start_timestamp=start_timestamp,
         roi=roi
