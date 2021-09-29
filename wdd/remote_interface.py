@@ -35,7 +35,7 @@ class ResultsSender():
                     try:
                         self.con = multiprocessing.connection.Client((self.address, self.port), authkey=self.authkey.encode())
                         print("\nConnected external interface.")
-                    except ConnectionRefusedError as e:
+                    except (ConnectionRefusedError, ConnectionResetError) as e:
                         time.sleep(2.0)
                         continue
                 
@@ -45,8 +45,8 @@ class ResultsSender():
 
                 try:
                     self.con.send(msg)
-                except ConnectionResetError as e:
-                    print("\nExternal connection reset.")
+                except (ConnectionResetError, BrokenPipeError) as e:
+                    print("\nExternal connection reset. " + str(e))
                     self.con = None
                     time.sleep(0.5)
 
@@ -62,7 +62,8 @@ class ResultsSender():
             system_timestamp_sending=datetime.datetime.utcnow(),
             x=np.median(metadata_dict["x_coordinates"]),
             y=np.median(metadata_dict["y_coordinates"]),
-            cam_id=metadata_dict["cam_id"]
+            cam_id=metadata_dict["cam_id"],
+            waggle_id=metadata_dict["waggle_id"]
         )
 
         if "waggle_angle" in metadata_dict:
