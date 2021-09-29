@@ -245,7 +245,7 @@ class Flea3CapturePySpin(Camera):
         self, height, width, fps, device, subsample=0,  fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None, roi=None
     ):
         super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp,
-                        roi=None) # Don't pass on ROI. Use the camera feature instead.
+                        roi=roi)
 
         self.device = device
         self.camera = None
@@ -264,12 +264,6 @@ class Flea3CapturePySpin(Camera):
         self.camera.AcquisitionFrameRate = int(fps)
 
         self.camera.GammaEnabled = False
-
-        if roi is not None:
-            self.camera.OffsetX = roi[0]
-            self.camera.OffsetY = roi[1]
-            self.camera.Width = roi[2]
-            self.camera.Height = roi[3]
 
         self.camera.init()
         self.camera.start()
