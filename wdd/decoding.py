@@ -286,6 +286,10 @@ class WaggleDecoder():
         activations = np.mean(corr[:, y0:y1, x0:x1], axis=(1, 2))
 
         activations = scipy.ndimage.maximum_filter1d(activations, int(self.fps/6))
+        if np.any(np.isnan(activations)):
+            print("Warning: Invalid activation values: {}".format(activations))
+            return (None, None), None
+            
         t = skimage.filters.threshold_otsu(activations)
 
         a = activations > t
@@ -315,15 +319,17 @@ class WaggleDecoder():
         main_waggle_region = np.mean(waggle_regions, axis=0)
         main_waggle_region = skimage.filters.gaussian(main_waggle_region, sigma=kernel_size)
         peaks = skimage.feature.peak_local_max(main_waggle_region)
-        image_center = np.array(waggle_regions[0].shape) / 2.0
-        offset = np.linalg.norm(peaks - image_center, axis=1)
-        middle_peak = np.argmin(offset)
-        center = peaks[middle_peak]
-        # Figure out small central region around waggle.
-        y0, y1 = max(0, int(center[0] - self.scaled_bee_length)), min(waggle_regions.shape[1], int(center[0] + self.scaled_bee_length + 1))
-        x0, x1 = max(0, int(center[1] - self.scaled_bee_length)), min(waggle_regions.shape[2], int(center[1] + self.scaled_bee_length + 1))
+        if peaks.shape[0] > 0:
+            image_center = np.array(waggle_regions[0].shape) / 2.0
+            offset = np.linalg.norm(peaks - image_center, axis=1)
+            middle_peak = np.argmin(offset)
+            center = peaks[middle_peak]
+            # Figure out small central region around waggle.
+            y0, y1 = max(0, int(center[0] - self.scaled_bee_length)), min(waggle_regions.shape[1], int(center[0] + self.scaled_bee_length + 1))
+            x0, x1 = max(0, int(center[1] - self.scaled_bee_length)), min(waggle_regions.shape[2], int(center[1] + self.scaled_bee_length + 1))
         
-        waggle_regions = waggle_regions[:, y0:y1, x0:x1]
+            waggle_regions = waggle_regions[:, y0:y1, x0:x1]
+            
         filter_output = np.zeros(shape=waggle_regions[0].shape, dtype=np.float32)
 
         for idx in range(waggle_regions.shape[0]):
@@ -397,7 +403,9 @@ class WaggleDecoder():
         filtered_fourier = self.filter_fft_with_kernel(fourier_sum)
         fourier_angle = self.calculate_angle_from_filtered_fourier(filtered_fourier)
         
-        positional_angle = self.estimate_angle_from_moments(waggle_regions)
+        positional_angle = None
+        if waggle_regions is not None:
+            positional_angle = self.estimate_angle_from_moments(waggle_regions)
 
         """for idx in range(images.shape[0]):
             angle = (fourier_angle, positional_angle)
