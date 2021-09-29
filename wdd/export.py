@@ -7,6 +7,20 @@ import json
 import imageio
 import queue
 import threading
+import hashlib
+import uuid
+
+def generate_64bit_id():
+    """Returns a unique ID that is 64 bits long.
+    Taken from the bb_pipeline codebase.
+    """
+
+    hasher = hashlib.sha1()
+    hasher.update(uuid.uuid4().bytes)
+    hash = int.from_bytes(hasher.digest(), byteorder='big')
+    # strip to 64 bits
+    hash = hash >> (hash.bit_length() - 64)
+    return hash
 
 class VideoWriter:
     def __init__(self, device_name, fps, codec):
@@ -246,6 +260,7 @@ class WaggleExportPipeline:
                 "subsampling": self.subsampling_factor,
                 "global_roi": self.roi,
                 "cam_id": self.cam_id,
+                "waggle_id": generate_64bit_id()
             }
 
         return waggle, all_rois, metadata
