@@ -36,7 +36,8 @@ def run_wdd(
     export_steps=None,
     eval="",
     ipc=None,
-    record_video=None
+    record_video=None,
+    no_fullframes=False
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -150,7 +151,7 @@ def run_wdd(
         subsample=subsample,
         fps=fps,
         device=video_device,
-        fullframe_path=fullframe_path,
+        fullframe_path=fullframe_path if not no_fullframes else "",
         cam_identifier=cam_identifier,
         start_timestamp=start_timestamp,
         roi=roi
@@ -174,13 +175,15 @@ def run_wdd(
     processing_fps = None
     activity = np.array([np.nan])
     activity_norm = [+np.inf, -np.inf]
+    first_timestamp = None
     try:
             
         with generator_context as gen:
             for ret, frame, frame_orig, timestamp in gen:
                 if frame_idx % 10000 == 0:
                     start_time = time.time()
-
+                if first_timestamp is None:
+                    first_timestamp = timestamp
                 if not ret:
                     print("Unable to retrieve frame from video device")
                     break
@@ -280,7 +283,7 @@ def run_wdd(
 
     if waggle_metadata_saver is not None:
         import wdd.evaluation
-        ground_truth = wdd.evaluation.load_ground_truth(eval)
+        ground_truth = wdd.evaluation.load_ground_truth(eval, video_path=video_device, fps=fps, start_timestamp=first_timestamp)
         results = wdd.evaluation.calculate_scores(waggle_metadata_saver.all_waggles, ground_truth, bee_length=bee_length, verbose=False)
         print(results)
     return processing_fps

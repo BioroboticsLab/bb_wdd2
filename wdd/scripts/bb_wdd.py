@@ -95,6 +95,11 @@ def show_default_option(*args, **kwargs):
     default=None,
     help="Specify the OpenCV FourCC code to record a video to instead of processing (e.g. 'HFYU' or 'png ')."
 )
+@click.option(
+    "--no_fullframes",
+    is_flag=True,
+    help="Do not save full-sized images in regular intervals."
+)
 def main(
     bee_length,
     autoopt,
@@ -105,47 +110,10 @@ def main(
         print("\nStopping.")
     else:
         print("Optimizing hyperparameters..")
-        import hyperopt
-        from hyperopt import hp
-        from wdd.evaluation import load_ground_truth, calculate_scores, WaggleMetadataSaver
+        from wdd.autoopt import run_optimization
+        run_optimization(bee_length=bee_length, gt_path=autoopt, **kwargs)
 
-        ground_truth = load_ground_truth(autoopt)
         
-        search_space = dict(
-            bee_length = hp.quniform("bee_length", bee_length * 0.8, bee_length * 1.2, q=1),
-            subsample = hp.choice("subsample", list(np.arange(
-                                                    max(int(math.log(bee_length, 2) / math.log(5, 2)), 1),
-                                                    int(math.log(bee_length, 2))))),
-            binarization_threshold = hp.uniform("binarization_threshold", 2, 10),
-            max_frame_distance = hp.uniform("max_frame_distance", 0.25, 0.6),
-            min_num_detections = hp.uniform("min_num_detections", 0.05, 0.3),
-        )
-
-        def objective(fun_kwargs):
-            fun_kwargs = {**kwargs, **fun_kwargs}
-            fun_kwargs["no_warmup"] = True
-            fun_kwargs["verbose"] = False
-            fun_kwargs["bee_length"] = int(fun_kwargs["bee_length"])
-            fun_kwargs["subsample"] = int(fun_kwargs["subsample"])
-
-            
-            saver = WaggleMetadataSaver()
-            fun_kwargs["export_steps"] = [saver]
-            fps = run_wdd(**fun_kwargs)
-
-            results = calculate_scores(saver.all_waggles, ground_truth, bee_length=bee_length, verbose=False)
-            results["fps"] = fps
-            results["loss"] = 1.0 - results["f_0.5"]
-            results["status"] = hyperopt.STATUS_OK
-            return results
-
-        trials = hyperopt.Trials()
-        best = hyperopt.fmin(objective, search_space, algo=hyperopt.tpe.suggest, max_evals=20, show_progressbar=True, trials=trials)
-
-        print("Optimization finished!")
-        print("Best parameters:")
-        print(hyperopt.space_eval(search_space, best))
-        print(trials.best_trial["result"])
 
 
 
