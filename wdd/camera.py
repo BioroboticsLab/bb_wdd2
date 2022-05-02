@@ -62,7 +62,7 @@ class Camera:
         if self.start_timestamp is not None:
             timestamp = self.start_timestamp + datetime.timedelta(seconds=(self.counter / self.fps))
         else:
-            timestamp = datetime.datetime.utcnow()
+            timestamp = pytz.UTC.localize(datetime.datetime.utcnow())
         return timestamp
 
     def get_frame(self):
@@ -82,7 +82,7 @@ class Camera:
         # store on full frame image every hour
         if self.fullframe_path and (self.counter % (self.fps * 60 * 60) == 0):
             fullframe_im_path = os.path.join(
-                self.fullframe_path, "{}-{}.png".format(self.cam_identifier, timestamp.isoformat())
+                self.fullframe_path, "{}-{}.png".format(self.cam_identifier, timestamp.isoformat().replace(":", "_"))
             )
             print("\nStoring full frame image: {}".format(fullframe_im_path))
             output_frame = full_frame
