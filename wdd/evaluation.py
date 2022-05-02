@@ -72,6 +72,10 @@ def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length, verbose=T
 
     waggles_df = []
     for row in all_waggle_metadata:
+        if "predicted_class_label" in row:
+            if row["predicted_class_label"] != "waggle":
+                continue
+            
         x = np.median(row["x_coordinates"])
         y = np.median(row["y_coordinates"])
         begin = row["camera_timestamps"][0]

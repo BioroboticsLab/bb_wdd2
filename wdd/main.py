@@ -10,8 +10,7 @@ import numpy as np
 
 from wdd.camera import OpenCVCapture, Flea3Capture, Flea3CapturePySpin, cam_generator
 from wdd.processing import FrequencyDetector, WaggleDetector
-from wdd.export import WaggleSerializer, WaggleExportPipeline, VideoWriter
-from wdd.decoding import WaggleDecoder
+from wdd.export import WaggleSerializer, WaggleExportPipeline, VideoWriter, ClassFilter
 
 def run_wdd(
     capture_type,
@@ -37,7 +36,10 @@ def run_wdd(
     eval="",
     ipc=None,
     record_video=None,
-    no_fullframes=False
+    no_fullframes=False,
+    filter_model_path=None,
+    no_saving=False,
+    save_waggles_only=False
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -99,11 +101,23 @@ def run_wdd(
 
     frame_scale = frame_orig.shape[0] / height, frame_orig.shape[1] / width
 
+    waggle_decoder = None
+    class_filter = []
+    if not filter_model_path:
+        from wdd.decoding import WaggleDecoder
+        waggle_decoder = WaggleDecoder(fps=fps, bee_length=bee_length)
+    else:
+        from wdd.decoding_convnet import WaggleDecoderConvNet
+        waggle_decoder = WaggleDecoderConvNet(fps=fps, bee_length=bee_length,
+                model_path=filter_model_path)
+        if save_waggles_only:
+            class_filter = [ClassFilter(include_classes=["waggle"])]
+
     dd = FrequencyDetector(height=height, width=width, fps=fps)
     waggle_metadata_saver, external_interface = None, None
     waggle_serializer = None
     if export_steps is None:
-        export_steps = [WaggleDecoder(fps=fps, bee_length=bee_length)]
+        export_steps = [waggle_decoder] + class_filter
         if ipc:
             from wdd.remote_interface import ResultsSender
             external_interface = ResultsSender(address_string=ipc)
@@ -112,8 +126,10 @@ def run_wdd(
             from wdd.evaluation import WaggleMetadataSaver
             waggle_metadata_saver = WaggleMetadataSaver()
             export_steps.append(waggle_metadata_saver)
-        waggle_serializer = WaggleSerializer(cam_id=cam_identifier, output_path=output_path)
-        export_steps.append(waggle_serializer)
+
+        if not no_saving:
+            waggle_serializer = WaggleSerializer(cam_id=cam_identifier, output_path=output_path)
+            export_steps.append(waggle_serializer)
 
     exporter = WaggleExportPipeline(
         cam_id=cam_identifier,

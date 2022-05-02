@@ -69,6 +69,9 @@ class ResultsSender():
         if "waggle_angle" in metadata_dict:
             payload["waggle_angle"] = metadata_dict["waggle_angle"]
             payload["waggle_duration"] = metadata_dict["waggle_duration"]
+        if "predicted_class_label" in metadata_dict:
+            payload["predicted_class_label"] = metadata_dict["predicted_class_label"]
+            payload["predicted_class_confidence"] = metadata_dict["predicted_class_confidence"]
 
         self.queue.put(payload)
 

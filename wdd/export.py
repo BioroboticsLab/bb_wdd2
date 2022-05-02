@@ -22,6 +22,22 @@ def generate_64bit_id():
     hash = hash >> (hash.bit_length() - 64)
     return hash
 
+class ClassFilter:
+    def __init__(self, include_classes=[]):
+
+        self.include_classes = set(include_classes)
+
+    def __call__(self, waggle, full_frame_rois, metadata_dict, **kwargs):
+
+        label = metadata_dict.get("predicted_class_label", None)
+
+        if label:
+            if self.include_classes and (label not in self.include_classes):
+                return None
+        
+        return waggle, full_frame_rois, metadata_dict, kwargs
+
+
 class VideoWriter:
     def __init__(self, device_name, fps, codec, directory="./", prefix="WDD_Recording_"):
         self.writer = None
@@ -113,8 +129,9 @@ class WaggleSerializer:
             waggle_path = join(waggle_path, str(waggle_idx))
             makedirs(waggle_path, exist_ok=True)
 
+            label = metadata_dict.get("predicted_class_label", "waggle")
             print(
-                "\r{} - {}: Saving new waggle: {}{}".format(self.cam_id, datetime.utcnow(), waggle_path, " " * 20)
+                "\r{} - {}: Saving new {}: {}{}".format(self.cam_id, datetime.utcnow(), label, waggle_path, " " * 20)
             )
 
             for im_idx, roi in enumerate(full_frame_rois):
@@ -189,6 +206,8 @@ class WaggleExportPipeline:
                 print(str(e), flush=True)
                 # This, however, will lead to an error later.
                 self.export_queue = None
+
+                exit(1)
                 return
 
     def export(self, frame_idx, waggle):

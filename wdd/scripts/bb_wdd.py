@@ -100,6 +100,22 @@ def show_default_option(*args, **kwargs):
     is_flag=True,
     help="Do not save full-sized images in regular intervals."
 )
+@click.option(
+    "--filter_model_path",
+    type=str,
+    default=None,
+    help="Path to the bb_wdd_filter pytorch model checkpoint. If given, the convolutional neural network is used as the decoding stage."
+)
+@click.option(
+    "--no_saving",
+    is_flag=True,
+    help="Do not serialize detections to the file system."
+)
+@click.option(
+    "--save_waggles_only",
+    is_flag=True,
+    help="Needs the filter model. Disregards all detections not classified as 'waggle'."
+)
 def main(
     bee_length,
     autoopt,
