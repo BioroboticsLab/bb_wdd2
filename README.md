@@ -24,6 +24,8 @@ Installation
 The package can be installed from the repository here via pip.
 `pip install git+https://github.com/BioroboticsLab/bb_wdd2.git`
 
+The software has been tested on Linux and Windows.
+
 Use
 ---
 
