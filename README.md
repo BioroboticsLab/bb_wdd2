@@ -29,6 +29,16 @@ Use
 
 To list all possible arguments, execute `bb_wdd --help`.
 
+Output
+---
+The WDD saves a sequence of images for every detection and a `waggle.json` file that contains the metadata of the detection.
+[Here is a sample metadata file](https://github.com/BioroboticsLab/bb_wdd2/issues/2#issuecomment-1115956383).
+
+Here is a video of the image sequence that is recorded (if it doesn't play, click [here](https://github.com/BioroboticsLab/bb_wdd2/issues/2#issue-1223930405)):
+
+![Sample video snippet of detection](https://user-images.githubusercontent.com/6689731/166439183-02ed0e84-2b0f-46bf-a7b5-cc2019956738.mp4)
+
+
 ### Examples:
 
 #### Apply the WDD with default sensitivity settings to a video file.
@@ -41,9 +51,10 @@ The `subsample` arguments here scales the images down by a factor of 8 before pr
 This is the main argument to control the speed of the WDD.
 
 The `cam_identifier` is arbitrary and will be saved in the metadata of the waggles. It can be a camera identifier, side identifier (left/right) or experiment identifier as fit for your setup.
+The `output_path` is the directory the WDD will save detections to. The actual detections will be in subdirectories for the cam_identifier and for the date and time.
 
 ```
-bb_wdd --video_device ./Downloads/SomeVideoRecording.mp4 --cam_identifier cam0 --width 2048 --height 1080 --fps 60 --bee_length 44 --no_warmup --subsample 8
+bb_wdd --video_device ./Downloads/SomeVideoRecording.mp4 --cam_identifier cam0 --output_path ./wdd/ --width 2048 --height 1080 --fps 60 --bee_length 44 --no_warmup --subsample 8
 ```
 
 #### Specify sensitivity arguments
@@ -58,7 +69,7 @@ The default values for the parameters that control the sensitivity (mainly `bina
 
 Let's add them to the first example:
 ```
-bb_wdd --video_device ./Downloads/SomeVideoRecording.mp4 --cam_identifier cam0 --width 2048 --height 1080 --fps 60 --bee_length 44 --no_warmup --subsample 8 \
+bb_wdd --video_device ./Downloads/SomeVideoRecording.mp4 --cam_identifier cam0 --output_path ./wdd/ --width 2048 --height 1080 --fps 60 --bee_length 44 --no_warmup --subsample 8 \
        --binarization_threshold 6 --max_frame_distance 0.4 --min_num_detections 0.25
 ```
 
