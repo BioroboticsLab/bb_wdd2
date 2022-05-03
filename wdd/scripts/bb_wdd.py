@@ -13,10 +13,11 @@ def show_default_option(*args, **kwargs):
 
 
 @click.command()
-@show_default_option(
+@click.option(
     "--capture_type",
-    default="PyCapture2",
-    help="Whether to use OpenCV or PyCapture2 to aquire images",
+    default="OpenCV",
+    type=click.Choice(["OpenCV", "PyCapture2", "PySpin"], case_sensitive=False),
+    help="Which interface to use to acquire images. For video files, use OpenCV.",
 )
 @click.option(
     "--video_device", required=True, help="OpenCV video device. Can be camera index or video path"
