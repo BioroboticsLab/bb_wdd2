@@ -53,9 +53,9 @@ def show_default_option(*args, **kwargs):
     help="Only visualize every debug_frames frame in debug mode (can be slow if low)",
 )
 @click.option(
-    "--no_multiprocessing",
+    "--use_multiprocessing",
     is_flag=True,
-    help="Do not use a multiprocessing queue to fetch the images."
+    help="Use a multiprocessing queue to fetch the images."
 )
 @click.option(
     "--no_warmup",

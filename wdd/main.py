@@ -27,7 +27,7 @@ def run_wdd(
     cam_identifier,
     debug,
     debug_frames,
-    no_multiprocessing,
+    use_multiprocessing,
     no_warmup,
     start_timestamp,
     roi,
@@ -177,7 +177,7 @@ def run_wdd(
     start_time = time.time()
 
     generator_context = None
-    if not no_multiprocessing:
+    if use_multiprocessing:
         try:
             from multiprocessing_generator import ParallelGenerator
             generator_context = ParallelGenerator(frame_generator, max_lookahead=fps)
