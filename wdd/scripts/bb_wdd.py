@@ -22,6 +22,12 @@ def show_default_option(*args, **kwargs):
 @click.option(
     "--video_device", required=True, help="OpenCV video device. Can be camera index or video path"
 )
+@click.option(
+    "--video_device_fourcc", default=None, help="OpenCV fourcc code (e.g. 'MJPG'). Depends on the camera. Only used with capture_type 'OpenCV'."
+)
+@click.option(
+    "--video_device_api", default="CAP_ANY", help="OpenCV Capture API backend. Only used with capture_type 'OpenCV'."
+)
 @show_default_option("--height", default=180, help="Video frame height in px (before subsampling).")
 @show_default_option("--width", default=342, help="Video frame width in px (before subsampling).")
 @click.option("--subsample", default=0, help="Fast subsampling by using every Xth pixel of the images.")

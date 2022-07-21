@@ -131,22 +131,43 @@ class Camera:
 
 class OpenCVCapture(Camera):
     def __init__(
-        self, height, width, fps, device, subsample=0, fullframe_path=None, cam_identifier=None, start_timestamp=None, roi=None
+        self, height, width, fps, device, subsample=0, fullframe_path=None, cam_identifier=None, start_timestamp=None, roi=None, fourcc=None, capture_api=None
     ):
         super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp, roi=roi)
 
-        self.cap = cv2.VideoCapture(device)
+        preferred_api = cv2.CAP_ANY
+        if capture_api is not None:
+            try:
+                preferred_api = getattr(cv2, capture_api)
+            except Exception as e:
+                print("video_device_api invalid. Possible values are e.g. CAP_MSMF, CAP_DSHOW, CAP_FFMPEG, CAP_V4L2.")
+                
+        print("Opening OpenCV video device...", end="", flush=True)
+        self.cap = cv2.VideoCapture(device, preferred_api)
         if not self.cap.isOpened():
             try:
                 # Maybe the user intended the argument as a device index.
-                self.cap = cv2.VideoCapture(int(device))
+                self.cap = cv2.VideoCapture(int(device), preferred_api)
             except:
                 pass
             if not self.cap.isOpened():
                 raise RuntimeError("Could not open OpenCV device '{}'!".format(device))
+
+        print(" Done. Setting capture parameters...", end="", flush=True)
+        # Request the original size from the camera. Resizing in OpenCV or the camera might be a lot slower than doing it here.
+        size_upscaling = 1
+        if subsample > 1:
+            size_upscaling = subsample
+
+        if fourcc:
+            if len(fourcc) != 4:
+                raise ValueError("device_fourcc argument must be of length 4.")
+            self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fourcc))
+
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, int(width * size_upscaling))
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, int(height * size_upscaling))
         self.cap.set(cv2.CAP_PROP_FPS, fps)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        print(" Done.", flush=True)
 
         # Reuse the same allocated memory for a small speedup.
         self.buffer_frame_rgb_float = None
@@ -168,6 +189,9 @@ class OpenCVCapture(Camera):
             frame = self.buffer_frame_rgb_float.mean(axis=2)
         return ret, frame, full_frame, timestamp
 
+    def stop(self):
+        if self.cap is not None:
+            self.cap.release()
 
 class Flea3Capture(Camera):
     def __init__(

@@ -39,7 +39,9 @@ def run_wdd(
     no_fullframes=False,
     filter_model_path=None,
     no_saving=False,
-    save_waggles_only=False
+    save_waggles_only=False,
+    video_device_fourcc=None,
+    video_device_api=None,
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -48,8 +50,11 @@ def run_wdd(
     max_frame_distance = max_frame_distance * fps
     min_num_detections = min_num_detections * fps
 
+    capture_dependent_camera_kwargs = dict()
     if capture_type == "OpenCV":
         cam_obj = OpenCVCapture
+        capture_dependent_camera_kwargs["fourcc"] = video_device_fourcc
+        capture_dependent_camera_kwargs["capture_api"] = video_device_api
     elif capture_type == "PyCapture2":
         cam_obj = Flea3Capture
     elif capture_type == "PySpin":
@@ -89,9 +94,12 @@ def run_wdd(
         device=video_device,
         fullframe_path=None,
         cam_identifier=cam_identifier,
-        roi=roi
+        roi=roi,
+        **capture_dependent_camera_kwargs
     )
     _, _, frame_orig, _ = next(frame_generator)
+    # Clean up camera object.
+    del frame_generator
 
     full_frame_buffer_roi_size = bee_length * 5
     full_frame_buffer_len = 3 * int(fps)
@@ -170,7 +178,8 @@ def run_wdd(
         fullframe_path=fullframe_path if not no_fullframes else "",
         cam_identifier=cam_identifier,
         start_timestamp=start_timestamp,
-        roi=roi
+        roi=roi,
+        **capture_dependent_camera_kwargs
     )
 
     frame_idx = 0
