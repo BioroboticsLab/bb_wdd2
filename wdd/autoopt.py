@@ -14,9 +14,12 @@ def run_optimization(video_device, bee_length, gt_path, start_timestamp, fps, **
     if start_timestamp is None and ".annotations.json" in gt_path:
         # Make sure we have a start timestamp for loading BioTracker GT data.
         start_timestamp = pytz.UTC.localize(datetime.datetime(1970, 1, 1, 0))
-    
+    elif isinstance(start_timestamp, str):
+        start_timestamp = datetime.datetime.fromisoformat(start_timestamp).astimezone(pytz.utc)
+
     kwargs["fps"] = fps
     kwargs["no_fullframes"] = True
+    kwargs["no_saving"] = True
 
     all_video_files = glob.glob(video_device)
     print(all_video_files)
