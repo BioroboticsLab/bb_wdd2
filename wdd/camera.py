@@ -21,6 +21,15 @@ except ImportError:
     if not flea3_supported:
         print("Unable to import PyCapture2, Flea3 cameras won't work")
 
+cuda_is_available = False
+try:
+    import torch
+    cuda_is_available = torch.cuda.is_available()
+except Exception:
+    pass
+if cuda_is_available:
+    print("Torch/CUDA is available and will be used to speed up computations.")
+
 
 class Camera:
     def __init__(self, height, width, fps=None, subsample=0, fullframe_path=None, cam_identifier="cam", start_timestamp=None, roi=None):
@@ -34,7 +43,6 @@ class Camera:
         if roi is not None:
             roi = list(map(int, [roi[0], roi[1], roi[0] + roi[2], roi[1] + roi[3]]))
         self.roi = roi
-        
 
         self.start_timestamp = None
         if start_timestamp is not None:
@@ -50,12 +58,28 @@ class Camera:
         """
         raise NotImplementedError()
     
-    def subsample_frame(self, frame):
+    def subsample_frame(self, frame, normalize=False):
         if frame is not None:
             if self.roi is not None:
                 frame = frame[self.roi[1]:self.roi[3], self.roi[0]:self.roi[2]]
             if self.subsample > 1:
                 frame = frame[::self.subsample, ::self.subsample]
+
+            if not cuda_is_available and not np.issubdtype(frame.dtype, np.floating):
+                frame = frame.astype(np.float32)
+            elif cuda_is_available:
+                frame = torch.as_tensor(frame, dtype=torch.float32, device="cuda")
+
+            if len(frame.shape) > 2 and frame.shape[2] > 1:
+                assert frame.shape[2] < frame.shape[0]
+                frame = frame.mean(axis=2)
+
+            if normalize:
+                frame /= 255.0
+
+            if cuda_is_available:
+                frame = frame.cpu().numpy()
+
         return frame
 
     def get_current_timestamp(self):
@@ -119,7 +143,7 @@ class Camera:
             else:
                 hits = 0
 
-            print("FPS: {:.1f} [{}]".format(processing_fps, fps_target_hit))
+            print("FPS: {:.1f} [{}]".format(processing_fps, fps_target_hit), flush=True)
 
             if hits >= num_hits:
                 print("Success")
@@ -170,7 +194,6 @@ class OpenCVCapture(Camera):
         print(" Done.", flush=True)
 
         # Reuse the same allocated memory for a small speedup.
-        self.buffer_frame_rgb_float = None
         self.capture_double_buffer = None
 
     def _get_frame(self):
@@ -180,13 +203,8 @@ class OpenCVCapture(Camera):
 
         if self.capture_double_buffer is not None:
             full_frame = self.capture_double_buffer.copy()
-            frame = self.subsample_frame(full_frame)
+            frame = self.subsample_frame(full_frame, normalize=True)
 
-            if self.buffer_frame_rgb_float is None:
-                self.buffer_frame_rgb_float = np.zeros(shape=frame.shape, dtype=np.float32)
-            self.buffer_frame_rgb_float[:] = frame
-            self.buffer_frame_rgb_float /= 255.0
-            frame = self.buffer_frame_rgb_float.mean(axis=2)
         return ret, frame, full_frame, timestamp
 
     def stop(self):
@@ -259,8 +277,7 @@ class Flea3Capture(Camera):
         full_frame = np.array(self.cap.retrieveBuffer())
         timestamp = self.get_current_timestamp()
 
-        im = self.subsample_frame(full_frame)
-        im = im.astype(np.float32) / 255.0
+        im = self.subsample_frame(full_frame, normalize=True)
 
         return True, im, full_frame, timestamp
 
@@ -296,8 +313,7 @@ class Flea3CapturePySpin(Camera):
         full_frame = self.camera.get_array()
         timestamp = self.get_current_timestamp()
 
-        im = self.subsample_frame(full_frame)
-        im = im.astype(np.float32) / 255.0
+        im = self.subsample_frame(full_frame, normalize=True)
 
         return True, im, full_frame, timestamp
 
