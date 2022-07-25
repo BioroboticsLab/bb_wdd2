@@ -306,10 +306,10 @@ class WaggleDetector:
         blobs_morph = (activity > self.binarization_threshold).astype(np.uint8)
         blobs_morph = cv2.morphologyEx(blobs_morph, cv2.MORPH_OPEN, self.default_selem)
         blobs_morph = cv2.dilate(blobs_morph, self.selem)
-        blobs_labels = measure.label(blobs_morph, background=0)
+        blobs_labels, blobs_label_count = measure.label(blobs_morph, background=0, return_num=True)
 
         frame_waggle_positions = []
-        for blob_index in range(1, blobs_labels.max() + 1):
+        for blob_index in range(1, blobs_label_count + 1):
             waggle_area = blobs_labels == blob_index
             y, x = np.mean(np.argwhere(waggle_area), axis=0)
 
