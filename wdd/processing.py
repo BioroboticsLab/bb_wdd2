@@ -1,7 +1,6 @@
 import cv2
 from datetime import datetime
 import numpy as np
-import opt_einsum
 import scipy
 import scipy.signal
 from scipy.optimize import linear_sum_assignment
@@ -10,6 +9,8 @@ from skimage import measure
 from skimage.morphology.selem import _default_selem
 
 from wdd.datastructures import Waggle
+
+from .torch_support import torch
 
 import numba
 
@@ -24,7 +25,8 @@ def normalize_rolling_buffer_online(rolling_mean, buffer, output_buffer):
     newest_frame = buffer[-1]
 
     # Update rolling mean by subtracting first observation and adding latest.
-    rolling_mean = rolling_mean - oldest_frame / buffer_size + newest_frame / buffer_size
+    rolling_mean -= oldest_frame / buffer_size 
+    rolling_mean += newest_frame / buffer_size
 
     # Normalize buffer by subtracting mean and dividing by max(abs()).
     for y in numba.prange(buffer.shape[1]):
@@ -38,6 +40,25 @@ def normalize_rolling_buffer_online(rolling_mean, buffer, output_buffer):
                     pixel_max = new_value
             for z in range(buffer.shape[0]):
                 output_buffer[z, y, x] = (buffer[z, y, x] - current_buffer_mean) / pixel_max
+
+def normalize_rolling_buffer_online_torch(rolling_mean, buffer, output_buffer):
+    """
+    Functionally equivalent to normalize_rolling_buffer_online but supports pytorch tensors.
+    """
+    buffer_size = buffer.shape[0]
+    oldest_frame = buffer[0]
+    newest_frame = buffer[-1]
+
+    rolling_mean -= oldest_frame / buffer_size
+    rolling_mean += newest_frame / buffer_size
+
+ 
+    output_buffer[:] = buffer - rolling_mean
+    max_pixel_values, _ = output_buffer.abs().max(axis=0)
+
+    max_pixel_values[max_pixel_values < 1e-1] = 1e-1
+    output_buffer /= max_pixel_values
+
 
 @numba.njit(parallel=True, cache=True, nogil=True)
 def apply_wavelets(wavelets, normalized_frame_buffer, output):
@@ -59,6 +80,22 @@ def apply_wavelets(wavelets, normalized_frame_buffer, output):
 
             output[y, x] = pixel_sum / n_wavelets
 
+def apply_wavelets_torch(wavelets, normalized_frame_buffer, output):
+    """
+    Functionally equivalent to apply_wavelets but supports pytorch tensors.
+    """
+
+    n_wavelets = wavelets.shape[0]
+    output[:, :] = 0
+
+    for w in range(n_wavelets):
+        wavelet = wavelets[w, :].unsqueeze(1).unsqueeze(1)
+
+        wavelet_correlation = (wavelet * normalized_frame_buffer).sum(axis=0).abs() / n_wavelets
+
+        output += wavelet_correlation
+
+
 @numba.njit(parallel=True, cache=True, nogil=True)
 def post_process_response(frame_response, fps, activity, activity_long, activity_decay, activity_long_decay, output):
     """
@@ -79,6 +116,21 @@ def post_process_response(frame_response, fps, activity, activity_long, activity
                 current_pixel_activity = current_pixel_activity ** 4.0
             output[y, x] = current_pixel_activity
 
+def post_process_response_torch(frame_response, fps, activity, activity_long, activity_decay, activity_long_decay, output):
+    """
+    Functionally equivalent to post_process_response but supports pytorch tensors.
+    """
+
+    current_response = frame_response.pow(2)
+    activity *= activity_decay
+    activity += current_response
+
+    output[:] = (activity - activity_long / fps).clamp(0.0).pow(4.0)
+
+    activity_long *= activity_long_decay
+    activity_long += current_response
+
+
 class FrequencyDetector:
     def __init__(
         self,
@@ -88,6 +140,7 @@ class FrequencyDetector:
         freq_min=12,
         freq_max=15,
         num_base_functions=4,
+        use_torch=True
     ):
         self.width = width
         self.height = height
@@ -114,12 +167,41 @@ class FrequencyDetector:
         self.activity_decay = np.exp(np.log(0.05) / self.fps)
         self.activity_long_decay = np.exp(np.log(0.1) / self.fps)
 
-        self.einsum_expression = opt_einsum.contract_expression("ij,jkl->ikl", self.wavelets.shape, (self.wavelets.shape[1], height, width))
-
         self.warmup_period_over = False
+
         self.rolling_mean = np.zeros(shape=(height, width), dtype=np.float32)
         self.temp_full_buffer = np.zeros(shape=(self.wavelets.shape[1], height, width), dtype=np.float32)
         self.temp_one_frame_buffer = np.zeros(shape=(height, width), dtype=np.float32)
+
+        self.apply_wavelets = apply_wavelets
+        self.normalize_rolling_buffer_online = normalize_rolling_buffer_online
+        self.post_process_response = post_process_response
+
+        self.use_torch = use_torch and torch is not None
+        self.torch_debug = None
+
+        if self.use_torch:
+            self.wavelets = torch.as_tensor(self.wavelets, dtype=torch.float32, device="cuda")
+            self.buffer = torch.as_tensor(self.buffer, dtype=torch.float32, device="cuda")
+
+            self.activity = torch.as_tensor(self.activity, dtype=torch.float32, device="cuda")
+            self.activity_long = torch.as_tensor(self.activity_long, dtype=torch.float32, device="cuda")
+
+            self.frame_response = torch.as_tensor(self.frame_response, dtype=torch.float32, device="cuda")
+
+            self.rolling_mean = torch.as_tensor(self.rolling_mean, dtype=torch.float32, device="cuda")
+            self.temp_full_buffer = torch.as_tensor(self.temp_full_buffer, dtype=torch.float32, device="cuda")
+            self.temp_one_frame_buffer = torch.as_tensor(self.temp_one_frame_buffer, dtype=torch.float32, device="cuda")
+
+            self.apply_wavelets = apply_wavelets_torch
+            self.normalize_rolling_buffer_online = normalize_rolling_buffer_online_torch
+            self.post_process_response = post_process_response_torch
+
+            if False:
+                self.torch_debug = FrequencyDetector(height=height, width=width, fps=fps, use_torch=False)
+        
+        # For debugging.
+        self.last_current_buffer = None
 
     def _get_wavelet(self, frequency):
         s, w = 0.25, 15.0
@@ -132,6 +214,9 @@ class FrequencyDetector:
         return wavelet
 
     def process(self, frame):
+        if self.torch_debug is not None:
+            self.torch_debug.process(frame.cpu().numpy())
+
         # Calculate rolling buffer index, so that the wavelets can always be multiplied
         # against a continuous buffer region.
         # I.e. sometimes write images at end AND beginning of buffer.
@@ -142,20 +227,33 @@ class FrequencyDetector:
             self.buffer[idx] = frame
         
         current_buffer = self.buffer[(current_buffer_idx - self.max_wavelet_length + 1):(current_buffer_idx + 1)]
+        self.last_current_buffer = current_buffer
+
         if not self.warmup_period_over:
             if self.buffer_idx >= self.max_wavelet_length:
                 self.warmup_period_over = True
                 # Initialize rolling sum.
-                self.rolling_mean = np.mean(current_buffer, axis=0)
+                self.rolling_mean = current_buffer.mean(axis=0)
+
         else:
-            normalize_rolling_buffer_online(self.rolling_mean, current_buffer, self.temp_full_buffer)
-            apply_wavelets(self.wavelets, self.temp_full_buffer, self.frame_response)
-            post_process_response(self.frame_response, self.fps, self.activity, self.activity_long, self.activity_decay, self.activity_long_decay, self.temp_one_frame_buffer)
+            self.normalize_rolling_buffer_online(self.rolling_mean, current_buffer, self.temp_full_buffer)
+            self.apply_wavelets(self.wavelets, self.temp_full_buffer, self.frame_response)
+            self.post_process_response(self.frame_response, self.fps, self.activity, self.activity_long, self.activity_decay, self.activity_long_decay, self.temp_one_frame_buffer)
+
+            if self.torch_debug is not None:
+                assert np.allclose(self.torch_debug.buffer, self.buffer.cpu().numpy())
+                assert np.allclose(self.torch_debug.last_current_buffer, self.last_current_buffer.cpu().numpy())
+                assert np.allclose(self.torch_debug.rolling_mean, self.rolling_mean.cpu().numpy())
+                assert np.allclose(self.torch_debug.temp_full_buffer, self.temp_full_buffer.cpu().numpy(), rtol=0.0, atol=1e-5)
+                assert np.allclose(self.torch_debug.frame_response, self.frame_response.cpu().numpy(), rtol=0.0, atol=1e-5)
 
         self.buffer_idx += 1
         self.buffer_idx %= (self.buffer_size - self.max_wavelet_length)
 
-        return self.temp_one_frame_buffer
+        result = self.temp_one_frame_buffer
+        if self.use_torch:
+            result = result.cpu().numpy()
+        return result
 
 
 class WaggleDetector:

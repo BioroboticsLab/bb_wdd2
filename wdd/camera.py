@@ -21,14 +21,7 @@ except ImportError:
     if not flea3_supported:
         print("Unable to import PyCapture2, Flea3 cameras won't work")
 
-cuda_is_available = False
-try:
-    import torch
-    cuda_is_available = torch.cuda.is_available()
-except Exception:
-    pass
-if cuda_is_available:
-    print("Torch/CUDA is available and will be used to speed up computations.")
+from .torch_support import torch
 
 
 class Camera:
@@ -65,9 +58,9 @@ class Camera:
             if self.subsample > 1:
                 frame = frame[::self.subsample, ::self.subsample]
 
-            if not cuda_is_available and not np.issubdtype(frame.dtype, np.floating):
+            if torch is None and not np.issubdtype(frame.dtype, np.floating):
                 frame = frame.astype(np.float32)
-            elif cuda_is_available:
+            elif torch is not None:
                 frame = torch.as_tensor(frame, dtype=torch.float32, device="cuda")
 
             if len(frame.shape) > 2 and frame.shape[2] > 1:
@@ -76,9 +69,6 @@ class Camera:
 
             if normalize:
                 frame /= 255.0
-
-            if cuda_is_available:
-                frame = frame.cpu().numpy()
 
         return frame
 
