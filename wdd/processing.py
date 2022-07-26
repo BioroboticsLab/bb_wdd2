@@ -6,7 +6,6 @@ import scipy.signal
 from scipy.optimize import linear_sum_assignment
 from skimage import morphology
 from skimage import measure
-from skimage.morphology.selem import _default_selem
 
 from wdd.datastructures import Waggle
 
@@ -275,7 +274,7 @@ class WaggleDetector:
         self.max_frame_distance = max_frame_distance
         self.min_num_detections = min_num_detections
         self.exporter = exporter
-        self.default_selem = _default_selem(opening_selem_radius).astype(np.uint8)
+        self.default_selem = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
         self.selem = morphology.selem.disk(dilation_selem_radius)
         self.datetime_buffer = datetime_buffer
         self.full_frame_buffer_len = full_frame_buffer_len
