@@ -263,7 +263,7 @@ class WaggleDetector:
         max_frame_distance,
         min_num_detections,
         exporter,
-        opening_selem_radius,
+        opening_selem_size,
         dilation_selem_radius,
         datetime_buffer,
         full_frame_buffer_len,
@@ -274,7 +274,7 @@ class WaggleDetector:
         self.max_frame_distance = max_frame_distance
         self.min_num_detections = min_num_detections
         self.exporter = exporter
-        self.default_selem = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+        self.default_selem = cv2.getStructuringElement(cv2.MORPH_CROSS, (opening_selem_size, opening_selem_size))
         self.selem = morphology.selem.disk(dilation_selem_radius)
         self.datetime_buffer = datetime_buffer
         self.full_frame_buffer_len = full_frame_buffer_len
