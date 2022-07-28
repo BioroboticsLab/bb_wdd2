@@ -275,7 +275,7 @@ class WaggleDetector:
         self.min_num_detections = min_num_detections
         self.exporter = exporter
         self.default_selem = cv2.getStructuringElement(cv2.MORPH_CROSS, (opening_selem_size, opening_selem_size))
-        self.selem = morphology.selem.disk(dilation_selem_radius)
+        self.selem = morphology.disk(dilation_selem_radius)
         self.datetime_buffer = datetime_buffer
         self.full_frame_buffer_len = full_frame_buffer_len
         self.debug = debug
