@@ -25,10 +25,12 @@ from .torch_support import torch
 
 
 class Camera:
-    def __init__(self, height, width, fps=None, subsample=0, fullframe_path=None, cam_identifier="cam", start_timestamp=None, roi=None):
+    def __init__(self, height, width, target_height, target_width, fps=None, subsample=0, fullframe_path=None, cam_identifier="cam", start_timestamp=None, roi=None):
         self.fps = fps
         self.height = height
         self.width = width
+        self.target_height = target_height
+        self.target_width = target_width
         self.subsample = subsample
         self.counter = 0
         self.fullframe_path = fullframe_path
@@ -85,13 +87,21 @@ class Camera:
         if not ret:
             return ret, frame, full_frame, timestamp
 
-        if frame.shape[0] != self.height or frame.shape[1] != self.width:
+        if frame.shape[0] != self.target_height or frame.shape[1] != self.target_width:
             frame_original_shape = frame.shape
-            frame = skimage.transform.resize(frame, (self.height, self.width), mode='constant', order=1, anti_aliasing=False)
+            target_shape = (self.target_height, self.target_width)
 
             if not self.resize_warning_emitted:
                 self.resize_warning_emitted = True
-                print("Warning! Necessary to resize the image after subsampling ({}) to fit into desired output shape ({}). This could be slow.".format(frame_original_shape, frame.shape))
+                print("Warning! Necessary to resize the image after subsampling ({}) to fit into desired output shape ({}). This could be slow.".format(frame_original_shape, target_shape))
+            
+            if torch is None:
+                frame = skimage.transform.resize(frame, target_shape, mode='constant', order=1, anti_aliasing=False)
+            else:
+                from torchvision.transforms import Resize
+                resizer = Resize(target_shape)
+                frame = resizer(frame.unsqueeze(0)).squeeze()
+
             
         # store on full frame image every hour
         if self.fullframe_path and (self.counter % (self.fps * 60 * 60) == 0):
@@ -145,9 +155,9 @@ class Camera:
 
 class OpenCVCapture(Camera):
     def __init__(
-        self, height, width, fps, device, subsample=0, fullframe_path=None, cam_identifier=None, start_timestamp=None, roi=None, fourcc=None, capture_api=None
+        self, height, width, fps, device, subsample=0, fullframe_path=None, cam_identifier=None, start_timestamp=None, roi=None, fourcc=None, capture_api=None, **kwargs
     ):
-        super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp, roi=roi)
+        super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp, roi=roi, **kwargs)
 
         preferred_api = cv2.CAP_ANY
         if capture_api is not None:
@@ -168,18 +178,14 @@ class OpenCVCapture(Camera):
                 raise RuntimeError("Could not open OpenCV device '{}'!".format(device))
 
         print(" Done. Setting capture parameters...", end="", flush=True)
-        # Request the original size from the camera. Resizing in OpenCV or the camera might be a lot slower than doing it here.
-        size_upscaling = 1
-        if subsample > 1:
-            size_upscaling = subsample
 
         if fourcc:
             if len(fourcc) != 4:
                 raise ValueError("device_fourcc argument must be of length 4.")
             self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fourcc))
 
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, int(width * size_upscaling))
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, int(height * size_upscaling))
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self.cap.set(cv2.CAP_PROP_FPS, fps)
         print(" Done.", flush=True)
 
@@ -203,9 +209,9 @@ class OpenCVCapture(Camera):
 
 class Flea3Capture(Camera):
     def __init__(
-        self, height, width, fps, device, subsample=0,  fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None, roi=None
+        self, height, width, fps, device, subsample=0,  fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None, roi=None, **kwargs
     ):
-        super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp, roi=roi)
+        super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp, roi=roi, **kwargs)
 
         self.device = device
 
@@ -273,10 +279,10 @@ class Flea3Capture(Camera):
 
 class Flea3CapturePySpin(Camera):
     def __init__(
-        self, height, width, fps, device, subsample=0,  fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None, roi=None
+        self, height, width, fps, device, subsample=0,  fullframe_path=None, gain=100, cam_identifier=None, start_timestamp=None, roi=None, **kwargs
     ):
         super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp,
-                        roi=roi)
+                        roi=roi, **kwargs)
 
         self.device = device
         self.camera = None

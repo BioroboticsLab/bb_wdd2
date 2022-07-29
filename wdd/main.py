@@ -62,6 +62,9 @@ def run_wdd(
     else:
         raise RuntimeError("capture_type must be either OpenCV, PyCapture2, PySpin")
 
+    image_input_width = width
+    image_input_height = height
+
     if roi is not None and roi:
         width = int(roi[2])
         height = int(roi[3])
@@ -87,8 +90,10 @@ def run_wdd(
     frame_generator = cam_generator(
         cam_obj,
         warmup=False,
-        width=width,
-        height=height,
+        width=image_input_width,
+        height=image_input_height,
+        target_width=width,
+        target_height=height,
         subsample=subsample,
         fps=fps,
         device=video_device,
@@ -170,8 +175,10 @@ def run_wdd(
     frame_generator = cam_generator(
         cam_obj,
         warmup=not no_warmup,
-        width=width,
-        height=height,
+        width=image_input_width,
+        height=image_input_height,
+        target_width=width,
+        target_height=height,
         subsample=subsample,
         fps=fps,
         device=video_device,
