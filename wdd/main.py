@@ -12,6 +12,8 @@ from wdd.camera import OpenCVCapture, Flea3Capture, Flea3CapturePySpin, cam_gene
 from wdd.processing import FrequencyDetector, WaggleDetector
 from wdd.export import WaggleSerializer, WaggleExportPipeline, VideoWriter, ClassFilter
 
+from .torch_support import torch
+
 def run_wdd(
     capture_type,
     video_device,
@@ -254,15 +256,22 @@ def run_wdd(
                         im = im.astype(np.uint8)
                         if len(im.shape) == 2:
                             im = np.repeat(im[:, :, None], 3, axis=2)
+                        
                         # Scale image range robustly.
-                        activity_min = activity.min()
+                        activity_im = activity
+
+                        if torch is not None:
+                            activity_im = activity_im.cpu().numpy()
+
+                        activity_min = activity_im.min()
+                        activity_max = activity_im.max()
+
                         if activity_norm[0] > activity_min:
                             activity_norm[0] = activity_min
                         else:
                             activity_norm[0] = (0.9 * activity_norm[0]) + 0.1 * activity_min
-                        activity_im = (activity - activity_norm[0])
-
-                        activity_max = activity.max()
+                        activity_im = (activity_im - activity_norm[0])
+                        
                         if activity_norm[1] < activity_max:
                             activity_norm[1] = activity_max
                         else:
@@ -294,9 +303,14 @@ def run_wdd(
                     processing_fps = ((frame_idx % 10000) + 1) / (end_time - start_time)
                     if verbose:
                         what = "processing" if not video_writer else "recording"
+
+                        max_activity = activity.max()
+                        if torch is not None and not activity.ndim == 1:
+                            max_activity = float(max_activity.cpu())
+
                         sys.stdout.write(
                             "\rCurrently {} with FPS: {:.1f} | Max DD: {:.2f} | [{:16s} {}]".format(
-                                what, processing_fps, np.log1p(activity.max()), cam_identifier, video_device
+                                what, processing_fps, np.log1p(max_activity), cam_identifier, video_device
                             )
                         )
                         sys.stdout.flush()

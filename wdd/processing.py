@@ -249,10 +249,7 @@ class FrequencyDetector:
         self.buffer_idx += 1
         self.buffer_idx %= (self.buffer_size - self.max_wavelet_length)
 
-        result = self.temp_one_frame_buffer
-        if self.use_torch:
-            result = result.cpu().numpy()
-        return result
+        return self.temp_one_frame_buffer
 
 
 class WaggleDetector:
@@ -302,7 +299,13 @@ class WaggleDetector:
         self.current_waggles = new_current_waggles
 
     def _get_activity_regions(self, activity):
-        blobs_morph = (activity > self.binarization_threshold).astype(np.uint8)
+        blobs_morph = activity > self.binarization_threshold
+
+        if torch is not None:
+            blobs_morph = blobs_morph.cpu().numpy()
+            
+        blobs_morph = blobs_morph.astype(np.uint8)
+
         blobs_morph = cv2.morphologyEx(blobs_morph, cv2.MORPH_OPEN, self.default_selem)
         blobs_morph = cv2.dilate(blobs_morph, self.selem)
         blobs_labels, blobs_label_count = measure.label(blobs_morph, background=0, return_num=True)
@@ -312,8 +315,11 @@ class WaggleDetector:
             waggle_area = blobs_labels == blob_index
             y, x = np.mean(np.argwhere(waggle_area), axis=0)
 
-            waggle_response = np.max(activity[waggle_area])
-            frame_waggle_positions.append((y, x, waggle_response))
+            waggle_response = activity[waggle_area].max()
+            if torch is not None:
+                waggle_response = waggle_response.cpu()
+
+            frame_waggle_positions.append((y, x, float(waggle_response)))
 
         return frame_waggle_positions
 
