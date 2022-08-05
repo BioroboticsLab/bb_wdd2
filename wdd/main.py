@@ -46,6 +46,7 @@ def run_wdd(
     video_device_api=None,
     rtmp_stream_address=None,
     stream_fps=None,
+    no_processing=False
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -76,10 +77,13 @@ def run_wdd(
         roi = None
 
     video_writer = None
+    enable_processing = not no_processing
     record_input, record_output = False, False
     if record_video:
         print("Recording to file in current working directory instead of processing (codec = '{}')...".format(record_video))
         video_writer = VideoWriter(str(video_device), fps, record_video)
+        if not debug: # In non-debug mode, recording to file skips processing.
+            enable_processing = False
     elif rtmp_stream_address:
         print("Streaming instead of processing.")
         from wdd.streamer import RTMPStreamer
@@ -91,6 +95,16 @@ def run_wdd(
         else:
             record_input = True
 
+    # Compose a small string that describes what we do.
+    if verbose:
+        what = []
+        if enable_processing:
+            what.append("processing")
+        if rtmp_stream_address is not None:
+            what.append("streaming")
+        elif video_writer is not None:
+            what.append("recording")
+        processing_label = "+".join(what)
 
     subsample = int(subsample)
     if subsample > 1:
@@ -233,7 +247,8 @@ def run_wdd(
 
                 if record_input:
                     video_writer.write(frame_orig)
-                else:
+                
+                if enable_processing:
 
                     full_frame_buffer[frame_idx % full_frame_buffer_len] = frame_orig
                     datetime_buffer[frame_idx % full_frame_buffer_len] = timestamp
@@ -311,7 +326,6 @@ def run_wdd(
                     end_time = time.time()
                     processing_fps = ((frame_idx % 10000) + 1) / (end_time - start_time)
                     if verbose:
-                        what = "processing" if not video_writer else "recording"
 
                         max_activity = activity.max()
                         if torch is not None and not activity.ndim == 1:
@@ -319,7 +333,7 @@ def run_wdd(
 
                         sys.stdout.write(
                             "\rCurrently {} with FPS: {:.1f} | Max DD: {:.2f} | [{:16s} {}]".format(
-                                what, processing_fps, np.log1p(max_activity), cam_identifier, video_device
+                                processing_label, processing_fps, np.log1p(max_activity), cam_identifier, video_device
                             )
                         )
                         sys.stdout.flush()
