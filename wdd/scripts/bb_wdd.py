@@ -128,6 +128,11 @@ def show_default_option(*args, **kwargs):
     type=str,
     help="If supplied, all frames will be streamed to a RTMP address (e.g. YT). Mutually exclusive with recording to local file."
 )
+@click.option(
+    "--stream_fps",
+    type=int,
+    help="Number of frames per second to send to the stream muxer. Should divide the input FPS cleanly."
+)
 def main(
     bee_length,
     autoopt,
