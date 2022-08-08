@@ -13,6 +13,7 @@ class RTMPStreamer:
             "-b:v": "4500k",
             "-bufsize": "512k",
             "-pix_fmt": "yuv420p",
+            "-c:a": "aac",
             "-f": "flv",
         }
 
