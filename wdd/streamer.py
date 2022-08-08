@@ -63,8 +63,18 @@ class RTMPStreamer:
 
     def process_queue(self):
 
+        error_count = 0
         while True:
             frame = self.image_queue.get()
             if frame is None:
                 break
-            self.stream.write(frame)
+
+            try:
+                self.stream.write(frame)
+            except Exception as e:
+                print("Error writing to stream. Retrying. {}".format(str(e)))
+                error_count += 1
+                time.sleep(5.0)
+                if error_count >= 3:
+                    break
+
