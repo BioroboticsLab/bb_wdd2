@@ -159,6 +159,7 @@ class WaggleSerializer:
                     )
                 )
             )
+            metadata_dict["subdirectory_index"] = waggle_idx
             waggle_path = join(waggle_path, str(waggle_idx))
             makedirs(waggle_path, exist_ok=True)
 
