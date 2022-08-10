@@ -63,6 +63,8 @@ class Camera:
             if torch is None and not np.issubdtype(frame.dtype, np.floating):
                 frame = frame.astype(np.float32)
             elif torch is not None:
+                if not frame.flags.writeable:
+                    frame = frame.copy()
                 frame = torch.as_tensor(frame, dtype=torch.float32, device="cuda")
 
             if len(frame.shape) > 2 and frame.shape[2] > 1:
