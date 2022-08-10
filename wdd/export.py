@@ -59,7 +59,6 @@ class ClassFilter:
                 current_count = self.label_counter[label]
 
                 if save_every_x == 0 or ((save_every_x > 1) and (current_count % save_every_x != 0)):
-                    print("\rSkipping {} {}".format(current_count, label) + " " * 20)
                     full_frame_rois = []
 
                 self.label_counter[label] = current_count + 1
