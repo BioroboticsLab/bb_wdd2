@@ -129,6 +129,11 @@ def show_default_option(*args, **kwargs):
     help="Needs the filter model. Disregards all detections not classified as 'waggle'."
 )
 @click.option(
+    "--save_only_subset",
+    multiple=True,
+    help="Needs the filter model. Format 'label=X' to save only every X image sequence for a specific label (e.g. 'waggle=5' to save only every fifth waggle). Metadata is always saved."
+)
+@click.option(
     "--rtmp_stream_address",
     type=str,
     help="If supplied, all frames will be streamed to a RTMP address (e.g. YT). Mutually exclusive with recording to local file."

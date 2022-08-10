@@ -1,3 +1,4 @@
+import collections
 from datetime import datetime
 import numpy as np
 import os
@@ -23,9 +24,27 @@ def generate_64bit_id():
     return hash
 
 class ClassFilter:
-    def __init__(self, include_classes=[]):
+    def __init__(self, include_classes=[], save_only_subset=dict()):
 
-        self.include_classes = set(include_classes)
+        self.include_classes = set(include_classes) if include_classes else None
+
+        self.subsample_images_for_classes = save_only_subset
+        if save_only_subset:
+            # Parse user-provied arguments?
+            if isinstance(save_only_subset, list) or isinstance(save_only_subset, tuple):
+                self.subsample_images_for_classes = dict()
+                for filter in save_only_subset:
+                    try:
+                        label, count = filter.replace("=", ":").split(":")
+                        count = int(count)
+                        if count < 0:
+                            raise ValueError("Number can not be negative.")
+                        self.subsample_images_for_classes[label] = count
+                    except Exception as e:
+                        raise ValueError("Error when parsing argument {} for option 'save_only_subset'. {}".format(filter, str(e)))
+        print(self.subsample_images_for_classes)
+        self.label_counter = collections.defaultdict(int)
+            
 
     def __call__(self, waggle, full_frame_rois, metadata_dict, **kwargs):
 
@@ -34,6 +53,16 @@ class ClassFilter:
         if label:
             if self.include_classes and (label not in self.include_classes):
                 return None
+            
+            if self.subsample_images_for_classes:
+                save_every_x = self.subsample_images_for_classes.get(label, 1)
+                current_count = self.label_counter[label]
+
+                if save_every_x == 0 or ((save_every_x > 1) and (current_count % save_every_x != 0)):
+                    print("\rSkipping {} {}".format(current_count, label) + " " * 20)
+                    full_frame_rois = []
+
+                self.label_counter[label] = current_count + 1
         
         return waggle, full_frame_rois, metadata_dict, kwargs
 

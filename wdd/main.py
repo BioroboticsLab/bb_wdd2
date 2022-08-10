@@ -43,6 +43,7 @@ def run_wdd(
     no_saving=False,
     save_apngs=False,
     save_waggles_only=False,
+    save_only_subset=None,
     video_device_fourcc=None,
     video_device_api=None,
     rtmp_stream_address=None,
@@ -149,8 +150,11 @@ def run_wdd(
         from wdd.decoding_convnet import WaggleDecoderConvNet
         waggle_decoder = WaggleDecoderConvNet(fps=fps, bee_length=bee_length,
                 model_path=filter_model_path)
-        if save_waggles_only:
-            class_filter = [ClassFilter(include_classes=["waggle"])]
+        if save_waggles_only or save_only_subset is not None:
+            include_classes = ["waggle"] if save_waggles_only else None
+
+            class_filter = [ClassFilter(include_classes=include_classes,
+                                        save_only_subset=save_only_subset)]
 
     dd = FrequencyDetector(height=height, width=width, fps=fps)
     waggle_metadata_saver, external_interface = None, None
