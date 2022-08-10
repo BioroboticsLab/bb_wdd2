@@ -136,7 +136,8 @@ class WaggleSerializer:
 
             for im_idx, roi in enumerate(full_frame_rois):
                 roi = (roi * 255.0).astype(np.uint8)
-                imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), roi)
+                imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), roi,
+                                compress_level=5)
 
             with open(join(waggle_path, "waggle.json"), "w") as f:
                 json.dump(metadata_dict, f)
