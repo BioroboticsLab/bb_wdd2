@@ -41,6 +41,7 @@ def run_wdd(
     no_fullframes=False,
     filter_model_path=None,
     no_saving=False,
+    save_apngs=False,
     save_waggles_only=False,
     video_device_fourcc=None,
     video_device_api=None,
@@ -166,7 +167,8 @@ def run_wdd(
             export_steps.append(waggle_metadata_saver)
 
         if not no_saving:
-            waggle_serializer = WaggleSerializer(cam_id=cam_identifier, output_path=output_path)
+            waggle_serializer = WaggleSerializer(cam_id=cam_identifier, output_path=output_path,
+                                                save_apngs=save_apngs, fps=fps)
             export_steps.append(waggle_serializer)
 
     exporter = WaggleExportPipeline(

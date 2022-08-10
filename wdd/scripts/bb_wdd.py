@@ -119,6 +119,11 @@ def show_default_option(*args, **kwargs):
     help="Do not serialize detections to the file system."
 )
 @click.option(
+    "--save_apngs",
+    is_flag=True,
+    help="Save image sequences as one APNG file instead of multiple PNG files."
+)
+@click.option(
     "--save_waggles_only",
     is_flag=True,
     help="Needs the filter model. Disregards all detections not classified as 'waggle'."

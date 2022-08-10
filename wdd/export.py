@@ -85,11 +85,15 @@ class WaggleSerializer:
     def __init__(
         self,
         cam_id,
-        output_path
+        output_path,
+        save_apngs=False,
+        fps=None
     ):
 
         self.cam_id = cam_id
         self.output_path = output_path
+        self.save_apngs = save_apngs
+        self.fps = fps
 
         self.queue = queue.Queue()
         self.thread = threading.Thread(target=self.serialize, args=())
@@ -134,10 +138,15 @@ class WaggleSerializer:
                 "\r{} - {}: Saving new {}: {}{}".format(self.cam_id, datetime.utcnow(), label, waggle_path, " " * 20)
             )
 
-            for im_idx, roi in enumerate(full_frame_rois):
-                roi = (roi * 255.0).astype(np.uint8)
-                imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), roi,
-                                compress_level=5)
+            if full_frame_rois is not None and len(full_frame_rois) > 0:
+                full_frame_rois = ((roi * 255.0).astype(np.uint8) for roi in full_frame_rois)
+
+                if self.save_apngs:
+                    imageio.v3.imwrite(join(waggle_path, "frames.apng"), list(full_frame_rois), duration=1000/self.fps)
+                else:
+                    for im_idx, roi in enumerate(full_frame_rois):
+                        imageio.imwrite(join(waggle_path, "{:03d}.png".format(im_idx)), roi,
+                                        compress_level=5)
 
             with open(join(waggle_path, "waggle.json"), "w") as f:
                 json.dump(metadata_dict, f)
