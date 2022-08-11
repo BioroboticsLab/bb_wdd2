@@ -20,6 +20,7 @@ def run_optimization(video_device, bee_length, gt_path, start_timestamp, fps, **
     kwargs["fps"] = fps
     kwargs["no_fullframes"] = True
     kwargs["no_saving"] = True
+    kwargs["stop_processing_on_low_fps"] = True
 
     all_video_files = glob.glob(video_device)
     print(all_video_files)
@@ -51,13 +52,17 @@ def run_optimization(video_device, bee_length, gt_path, start_timestamp, fps, **
             fun_kwargs["video_device"] = video_file
             saver = WaggleMetadataSaver()
             fun_kwargs["export_steps"] = [saver]
-            fps = run_wdd(**fun_kwargs)
+            processing_fps = run_wdd(**fun_kwargs)
             results = calculate_scores(saver.all_waggles, ground_truth, bee_length=bee_length, verbose=False)
             
-            results["fps"] = fps
+            results["fps"] = processing_fps
 
             for key, val in results.items():
                 all_results[key].append(val)
+            
+            # No need to pursue configurations that are too slow anyway.
+            if processing_fps <= fps / 2:
+                return dict(status=hyperopt.STATUS_FAIL)
 
         all_count_names = ("true_positives", "positives", "predicted_positive", "false_positives")
         other_keys = set(all_results.keys()) - set(all_count_names)

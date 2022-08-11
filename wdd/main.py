@@ -48,7 +48,8 @@ def run_wdd(
     video_device_api=None,
     rtmp_stream_address=None,
     stream_fps=None,
-    no_processing=False
+    no_processing=False,
+    stop_processing_on_low_fps=False
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -331,6 +332,11 @@ def run_wdd(
                 if frame_idx > 0 and (frame_idx % fps == 0):
                     end_time = time.time()
                     processing_fps = ((frame_idx % 10000) + 1) / (end_time - start_time)
+
+                    if stop_processing_on_low_fps and (processing_fps < fps / 2) and (frame_idx > fps * 2):
+                        print("\rStopping due to low FPS ({:3.2f} FPS).".format(processing_fps))
+                        break
+
                     if verbose:
 
                         max_activity = activity.max()
