@@ -144,6 +144,12 @@ def show_default_option(*args, **kwargs):
     help="Number of frames per second to send to the stream muxer. Should divide the input FPS cleanly."
 )
 @click.option(
+    "--stream_codec",
+    type=str,
+    default="libx264",
+    help="FFMPEG video codec to use for streaming."
+)
+@click.option(
     "--no_processing",
     is_flag=True,
     help="If set, skip processing the frames (e.g. to stream without processing). Set by default when recording to file."

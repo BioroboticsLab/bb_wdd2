@@ -3,12 +3,12 @@ import threading
 import time
 class RTMPStreamer:
 
-    def __init__(self, address, input_fps=None, output_fps=None, debug=False):
+    def __init__(self, address, input_fps=None, output_fps=None, debug=False, stream_codec="libx264"):
         self.address = address
         
         output_params = output_params = {
             "-clones": ["-f", "lavfi", "-i", "anullsrc"],
-            "-vcodec": "libx264",
+            "-vcodec": stream_codec,
             "-preset": "medium",
             "-b:v": "4500k",
             "-bufsize": "512k",

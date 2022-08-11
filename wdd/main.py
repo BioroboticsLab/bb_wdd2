@@ -49,7 +49,8 @@ def run_wdd(
     rtmp_stream_address=None,
     stream_fps=None,
     no_processing=False,
-    stop_processing_on_low_fps=False
+    stop_processing_on_low_fps=False,
+    stream_codec=None
 ):
     # FIXME: should be proportional to fps (how fast can a bee move in one frame while dancing)
     max_distance = bee_length
@@ -90,7 +91,7 @@ def run_wdd(
     elif rtmp_stream_address:
         print("Streaming instead of processing.")
         from wdd.streamer import RTMPStreamer
-        video_writer = RTMPStreamer(rtmp_stream_address, input_fps=fps, output_fps=stream_fps, debug=debug)
+        video_writer = RTMPStreamer(rtmp_stream_address, input_fps=fps, output_fps=stream_fps, debug=debug, stream_codec=stream_codec)
 
     if video_writer is not None:
         if debug:
