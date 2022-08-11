@@ -14,6 +14,7 @@ class RTMPStreamer:
             "-bufsize": "512k",
             "-pix_fmt": "yuv420p",
             "-c:a": "aac",
+            "-r": output_fps if output_fps else input_fps,
             "-f": "flv",
         }
 
