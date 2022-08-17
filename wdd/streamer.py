@@ -1,9 +1,16 @@
+import datetime
 import queue
 import threading
 import time
+
 class RTMPStreamer:
 
     def __init__(self, address, input_fps=None, output_fps=None, debug=False, stream_codec="libx264"):
+
+        if "{datetime}" in address:
+            dt_string = datetime.datetime.utcnow().isoformat().replace(":", "_")
+            address = address.replace("{datetime}", dt_string)
+
         self.address = address
         
         output_params = output_params = {
