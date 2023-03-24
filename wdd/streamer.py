@@ -5,7 +5,8 @@ import time
 
 class RTMPStreamer:
 
-    def __init__(self, address, input_fps=None, output_fps=None, debug=False, stream_codec="libx264"):
+    def __init__(self, address, input_fps=None, output_fps=None, debug=False, stream_codec="libx264",
+                max_queue_size=3, force_format="flv", **kwargs):
 
         if "{datetime}" in address:
             dt_string = datetime.datetime.utcnow().isoformat().replace(":", "_")
@@ -22,8 +23,11 @@ class RTMPStreamer:
             "-pix_fmt": "yuv420p",
             "-c:a": "aac",
             "-r": output_fps if output_fps else input_fps,
-            "-f": "flv",
         }
+        if force_format:
+            output_params["-f"] = force_format
+
+        output_params = {**output_params, **kwargs}
 
         from vidgear.gears import WriteGear
 
@@ -39,7 +43,7 @@ class RTMPStreamer:
         if input_fps is not None and output_fps is not None and (input_fps > output_fps):
             self.stream_every_x_frame = int(input_fps / output_fps)
 
-        self.image_queue = queue.Queue(maxsize=3)
+        self.image_queue = queue.Queue(maxsize=max_queue_size)
 
         self.thread = threading.Thread(target=self.process_queue, args=())
         self.thread.daemon = False
