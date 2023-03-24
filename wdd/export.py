@@ -92,7 +92,7 @@ class VideoWriter:
             if "/" in mangled_device_name or "\\" in mangled_device_name:
                 mangled_device_name = mangled_device_name.replace("\\", "/")
                 mangled_device_name = mangled_device_name.split("/")[-1]
-            output_video_name = self.directory + "/" + self.prefix + mangled_device_name + "_" + current_datetime + "+00.avi"
+            output_video_name = self.directory + "/" + self.prefix + mangled_device_name + "_" + current_datetime + "+00.mp4"
             print("Creating output video {}.".format(output_video_name))
             self.writer = cv2.VideoWriter(output_video_name,
                             fourcc,
