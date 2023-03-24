@@ -112,7 +112,8 @@ class WaggleDecoder():
             filter_output = skimage.transform.rescale(filter_output,
                             scale=self.rescale_factor,
                             anti_aliasing=False,
-                            multichannel=True)
+                            channel_axis=2)
+        
         filter_output = np.moveaxis(filter_output, 2, 0)
 
         return filter_output
@@ -260,7 +261,7 @@ class WaggleDecoder():
             images = skimage.transform.rescale(images,
                             scale=self.rescale_factor,
                             anti_aliasing=False,
-                            multichannel=True)
+                            channel_axis=2)
         images = np.moveaxis(images, 2, 0)
 
         images = images - images.mean(axis=0)
