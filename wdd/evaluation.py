@@ -2,6 +2,7 @@ import datetime
 import json
 import numpy as np
 import os
+import pathlib
 import pandas
 import pytz
 
@@ -19,21 +20,70 @@ def load_ground_truth(path, start_timestamp=None, fps=None, video_path=""):
         if not os.path.exists(path):
             raise ValueError("Path for ground truth data file is invalid.")
 
+    def map_frame_offset_to_timestamp(frame_index):
+        return start_timestamp + datetime.timedelta(seconds=frame_index / fps)
+
     if path.endswith("pickle"):
         annotations = pandas.read_pickle(path)
     elif path.endswith("csv"):
         assert path.endswith("csv")
-        annotations = pandas.read_csv(path, parse_dates=["start_ts", "end_ts"])
+        annotations = None
+        try:
+            annotations = pandas.read_csv(path, parse_dates=["start_ts", "end_ts"])
+        except Exception as e:
+            print("Default CSV parsing failed. Trying alternative.")
+
+        if annotations is None:
+            annotations = pandas.read_csv(path)
+            if not "thorax_positions" in annotations.columns:
+                raise ValueError("Could not parse annotation file: {}".format(path))
+            
+            video_leaf = pathlib.Path(video_path).name
+            csv_paths = [pathlib.Path(p).name for p in annotations.video_name]
+            annotations = annotations.loc[[i for i in range(len(csv_paths)) if csv_paths[i] == video_leaf], :]
+
+            import ast
+            import itertools
+
+            def parse_string_list(values):
+                if isinstance(values, list):
+                    values = map(ast.literal_eval, values)
+                    values = list(itertools.chain(*values))
+                else:
+                    values = ast.literal_eval(values)
+                return values
+
+            all_annotations = []
+            for row in range(annotations.shape[0]):
+                waggle_starts = parse_string_list(annotations.loc[row, "waggle_start_positions"])
+                waggle_ends = parse_string_list(annotations.loc[row, "thorax_positions"])
+                start_frames = parse_string_list(annotations.loc[row, "waggle_start_frames"])
+                end_frames = parse_string_list(annotations.loc[row, "thorax_frames"])
+                if len(waggle_starts) != len(waggle_ends):
+                    raise ValueError("Invalid data annotation in {}. Needs one waggle end per waggle start.".format(path))
+                
+                for idx in range(len(waggle_starts)):
+                    all_annotations.append(dict(
+                        start_ts=map_frame_offset_to_timestamp(start_frames[idx]),
+                        end_ts=map_frame_offset_to_timestamp(end_frames[idx]),
+                        origin_x=float(waggle_starts[idx][0]),
+                        origin_y=float(waggle_starts[idx][1]),
+                        end_x=float(waggle_ends[idx][0]),
+                        end_y=float(waggle_ends[idx][1])))
+            if len(all_annotations) == 0:
+                raise ValueError("Empty annotations in {}.".format(path))
+            annotations = pandas.DataFrame(all_annotations)
+            print("Loaded {} annotated waggles.".format(annotations.shape[0]))
+
     elif path.endswith(".annotations.json"): # BioTracker annotations.
         with open(path, "r") as f:
             annotations = json.load(f)
             annotations = [a for a in annotations if a["type"] == "arrow"]
 
-            def map_offset(frame_index):
-                return start_timestamp + datetime.timedelta(seconds=frame_index / fps)
+            
             annotations = pandas.DataFrame(annotations)
-            annotations["start_ts"] = annotations.start_frame.apply(map_offset)
-            annotations["end_ts"] = annotations.end_frame.apply(map_offset)
+            annotations["start_ts"] = annotations.start_frame.apply(map_frame_offset_to_timestamp)
+            annotations["end_ts"] = annotations.end_frame.apply(map_frame_offset_to_timestamp)
             for col in ("origin_x", "origin_y", "end_x", "end_y"):
                 annotations[col] = annotations[col].astype(np.float32)
     else:
