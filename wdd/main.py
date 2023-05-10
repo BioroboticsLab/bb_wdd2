@@ -315,9 +315,12 @@ def run_wdd(
                             h, w = h * subsample, w * subsample
                         activity_im = skimage.transform.resize(activity_im, (h, w))
                         if roi is not None:
-                            activity_im = np.pad(activity_im,
-                                        ((roi[1], im.shape[0] - h - roi[1]),
-                                        (roi[0], im.shape[1] - w - roi[0])))
+                            padding_height = (roi[1], im.shape[0] - h - roi[1])
+                            padding_width = (roi[0], im.shape[1] - w - roi[0])
+                            if padding_height[1] < 0 or padding_width[1] < 0:
+                                raise ValueError("Invalid ROI given. Please check size. (ROI: {}, Image size: {})".format(
+                                    roi, im.shape))
+                            activity_im = np.pad(activity_im, (padding_height, padding_width))
                         activity_im = (activity_im * 255.0).astype(np.uint8)
                         activity_im = cv2.applyColorMap(activity_im, cv2.COLORMAP_VIRIDIS)
                         # Due to rounding, the activity image can be a few pixels larger than the 'normal' image now.
