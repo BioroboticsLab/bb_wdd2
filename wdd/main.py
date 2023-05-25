@@ -199,6 +199,7 @@ def run_wdd(
         datetime_buffer=datetime_buffer,
         full_frame_buffer_len=full_frame_buffer_len,
         exporter=exporter,
+        warmup_frames=fps//2
     )
 
     fullframe_path = os.path.join(output_path, "fullframes")
