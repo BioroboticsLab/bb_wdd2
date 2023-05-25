@@ -74,9 +74,11 @@ def run_wdd(
     image_input_width = width
     image_input_height = height
 
+    roi_offset_x, roi_offset_y = 0, 0
     if roi is not None and roi:
         width = int(roi[2])
         height = int(roi[3])
+        roi_offset_x, roi_offset_y = int(roi[0]), int(roi[1])
     else:
         roi = None
 
@@ -141,8 +143,6 @@ def run_wdd(
     full_frame_buffer = [None] * full_frame_buffer_len
     datetime_buffer = [datetime.datetime.min.isoformat() for _ in range(full_frame_buffer_len)]
 
-    frame_scale = frame_orig.shape[0] / height, frame_orig.shape[1] / width
-
     waggle_decoder = None
     class_filter = []
     if not filter_model_path:
@@ -167,7 +167,7 @@ def run_wdd(
             from wdd.remote_interface import ResultsSender
             external_interface = ResultsSender(address_string=ipc)
             export_steps.append(external_interface)
-        if eval:
+        if eval or debug:
             from wdd.evaluation import WaggleMetadataSaver
             waggle_metadata_saver = WaggleMetadataSaver()
             export_steps.append(waggle_metadata_saver)
@@ -199,7 +199,6 @@ def run_wdd(
         datetime_buffer=datetime_buffer,
         full_frame_buffer_len=full_frame_buffer_len,
         exporter=exporter,
-        warmup_frames=fps//2
     )
 
     fullframe_path = os.path.join(output_path, "fullframes")
@@ -268,21 +267,6 @@ def run_wdd(
 
                     if debug and frame_idx % debug_frames == 0:
                         im = frame_orig.copy()
-                        current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
-                        current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.current_waggles]
-                        for blob_index, ((y, x), nd) in enumerate(
-                            zip(current_waggle_positions, current_waggle_num_detections)
-                        ):
-                            offset_x, offset_y = 0, 0
-                            if roi is not None:
-                                offset_x, offset_y = roi[:2]
-                            cv2.circle(
-                                im,
-                                (int(x * frame_scale[0] + offset_x), int(y * frame_scale[1] + offset_y)),
-                                10,
-                                (0, 0, 255),
-                                2,
-                            )
                         
                         if im.max() < 1.0 + 1e-5:
                             im = im * 255.0
@@ -327,6 +311,30 @@ def run_wdd(
                         # Due to rounding, the activity image can be a few pixels larger than the 'normal' image now.
                         activity_im = activity_im[0:im.shape[0], 0:im.shape[1], :]
                         im = cv2.addWeighted(im, 0.25, activity_im, 0.75, 0)
+
+                        current_waggle_num_detections = [len(w.xs) for w in wd.current_waggles]
+                        current_waggle_positions = [(w.ys[-1], w.xs[-1]) for w in wd.current_waggles]
+                        for blob_index, ((y, x), nd) in enumerate(
+                            zip(current_waggle_positions, current_waggle_num_detections)
+                        ):
+                            cv2.circle(
+                                im,
+                                (int(x * subsample + roi_offset_x), int(y * subsample + roi_offset_y)),
+                                10,
+                                (0, 0, 255),
+                                2,
+                            )
+                        
+                        if waggle_metadata_saver is not None:
+                            finished_waggles = waggle_metadata_saver.all_waggles[-2:]
+                            for waggle_metadata in finished_waggles:
+                                x_pos = np.median(waggle_metadata["x_coordinates"])
+                                y_pos = np.median(waggle_metadata["y_coordinates"])
+                                angle = waggle_metadata["waggle_angle"]
+                                direction_x, direction_y = bee_length * np.cos(angle), -bee_length * np.sin(angle)
+                                cv2.arrowedLine(im, (int(x_pos - direction_x), int(y_pos - direction_y)),
+                                                (int(x_pos + direction_x), int(y_pos + direction_y)),
+                                                (0, 255, 255), 1)
 
                         if record_output:
                             video_writer.write(im)
