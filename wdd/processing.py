@@ -315,9 +315,10 @@ class WaggleDetector:
         frame_waggle_positions = []
         for blob_index in range(1, blobs_label_count + 1):
             waggle_area = blobs_labels == blob_index
-            y, x = np.mean(np.argwhere(waggle_area), axis=0)
-
-            waggle_response = activity[waggle_area].max()
+            yx_hits = np.argwhere(waggle_area)
+            y, x = np.mean(yx_hits, axis=0)
+            waggle_response = activity[yx_hits[:, 0], yx_hits[:, 1]]
+            waggle_response = waggle_response.max()
             if torch is not None:
                 waggle_response = waggle_response.cpu()
 
