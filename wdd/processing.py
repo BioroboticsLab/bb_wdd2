@@ -265,6 +265,7 @@ class WaggleDetector:
         datetime_buffer,
         full_frame_buffer_len,
         debug=False,
+        warmup_frames=100
     ):
         self.max_distance = max_distance
         self.binarization_threshold = binarization_threshold
@@ -276,6 +277,7 @@ class WaggleDetector:
         self.datetime_buffer = datetime_buffer
         self.full_frame_buffer_len = full_frame_buffer_len
         self.debug = debug
+        self.warmup_frames = warmup_frames
 
         self.current_waggles = []
         if debug:
@@ -403,10 +405,10 @@ class WaggleDetector:
                     )
                 )
 
-    def process(self, frame_idx, activity, warmup=100):
+    def process(self, frame_idx, activity):
         self.finalize_frames(frame_idx)
 
         frame_waggle_positions = self._get_activity_regions(activity)
 
-        if frame_idx > warmup:
+        if frame_idx > self.warmup_frames:
             self._assign_regions_to_waggles(frame_idx, frame_waggle_positions)
