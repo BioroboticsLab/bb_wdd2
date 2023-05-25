@@ -55,10 +55,10 @@ def load_ground_truth(path, start_timestamp=None, fps=None, video_path=""):
 
             all_annotations = []
             for row in range(annotations.shape[0]):
-                waggle_starts = parse_string_list(annotations.loc[row, "waggle_start_positions"])
-                waggle_ends = parse_string_list(annotations.loc[row, "thorax_positions"])
-                start_frames = parse_string_list(annotations.loc[row, "waggle_start_frames"])
-                end_frames = parse_string_list(annotations.loc[row, "thorax_frames"])
+                waggle_starts = parse_string_list(annotations.waggle_start_positions.iloc[row])
+                waggle_ends = parse_string_list(annotations.thorax_positions.iloc[row])
+                start_frames = parse_string_list(annotations.waggle_start_frames.iloc[row])
+                end_frames = parse_string_list(annotations.thorax_frames.iloc[row])
                 if len(waggle_starts) != len(waggle_ends):
                     raise ValueError("Invalid data annotation in {}. Needs one waggle end per waggle start.".format(path))
                 
