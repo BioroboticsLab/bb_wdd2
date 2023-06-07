@@ -39,9 +39,12 @@ def load_ground_truth(path, start_timestamp=None, fps=None, video_path=""):
                 raise ValueError("Could not parse annotation file: {}".format(path))
             
             video_leaf = pathlib.Path(video_path).name
-            csv_paths = [pathlib.Path(p).name for p in annotations.video_name]
+            csv_paths = [pathlib.Path(p.replace("\\", "/")).name for p in annotations.video_name]
+            annotation_video_names = set(csv_paths)
             annotations = annotations.loc[[i for i in range(len(csv_paths)) if csv_paths[i] == video_leaf], :]
 
+            if annotations.empty:
+                raise ValueError("No annotations found for that video name (video name: {}, annotated videos: {}).".format(video_leaf, annotation_video_names ))
             import ast
             import itertools
 
