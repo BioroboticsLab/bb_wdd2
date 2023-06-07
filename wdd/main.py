@@ -330,9 +330,29 @@ def run_wdd(
                             for waggle_metadata in finished_waggles:
                                 x_pos = np.median(waggle_metadata["x_coordinates"])
                                 y_pos = np.median(waggle_metadata["y_coordinates"])
-                                angle = waggle_metadata["waggle_angle"]
-                                direction_x, direction_y = bee_length * np.cos(angle), -bee_length * np.sin(angle)
-                                cv2.arrowedLine(im, (int(x_pos - direction_x), int(y_pos - direction_y)),
+                                class_label = waggle_metadata.get("predicted_class_label", "waggle")
+
+                                if class_label != "waggle":
+                                    colormap = dict(activating=(0, 255, 100), ventilating=(255, 150, 150), other=(50, 50, 50))
+                                    color = colormap.get(class_label, (200, 200, 200))
+                                    radius = bee_length // 2
+                                    line_width = 2
+
+                                    if class_label == "other":
+                                        radius //= 2
+                                        line_width = 1
+
+                                    cv2.circle(
+                                        im,
+                                        (int(x_pos), int(y_pos)),
+                                        radius,
+                                        color,
+                                        line_width,
+                                    )
+                                else:
+                                    angle = waggle_metadata["waggle_angle"]
+                                    direction_x, direction_y = bee_length * np.cos(angle), -bee_length * np.sin(angle)
+                                    cv2.arrowedLine(im, (int(x_pos - direction_x), int(y_pos - direction_y)),
                                                 (int(x_pos + direction_x), int(y_pos + direction_y)),
                                                 (0, 255, 255), 1)
 
