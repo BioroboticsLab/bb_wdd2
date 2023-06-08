@@ -377,7 +377,7 @@ def run_wdd(
                             max_activity = float(max_activity.cpu())
 
                         sys.stdout.write(
-                            "\rCurrently {} with FPS: {:.1f} | Max DD: {:.2f} | [{:16s} {}]".format(
+                            "\r{}, FPS: {:.1f} | Max DD: {:.2f} | [{}, {}]".format(
                                 processing_label, processing_fps, np.log1p(max_activity), cam_identifier, video_device
                             )
                         )
