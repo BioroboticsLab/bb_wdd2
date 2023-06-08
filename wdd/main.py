@@ -87,9 +87,12 @@ def run_wdd(
     record_input, record_output = False, False
     if record_video:
         print("Recording to file in current working directory instead of processing (codec = '{}')...".format(record_video))
-        video_writer = VideoWriter(str(video_device), fps, record_video)
+        writer_fps = fps
         if not debug: # In non-debug mode, recording to file skips processing.
             enable_processing = False
+        else:
+            writer_fps //= debug_frames
+        video_writer = VideoWriter(str(video_device), writer_fps, record_video)
     elif rtmp_stream_address:
         print("Streaming instead of processing.")
         from wdd.streamer import RTMPStreamer
