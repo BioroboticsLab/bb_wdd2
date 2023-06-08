@@ -395,7 +395,7 @@ def run_wdd(
         if waggle_serializer is not None:
             waggle_serializer.finalize_serialization()
 
-    if waggle_metadata_saver is not None:
+    if eval and (waggle_metadata_saver is not None):
         import wdd.evaluation
         ground_truth = wdd.evaluation.load_ground_truth(eval, video_path=video_device, fps=fps, start_timestamp=first_timestamp)
         results = wdd.evaluation.calculate_scores(waggle_metadata_saver.all_waggles, ground_truth, bee_length=bee_length, verbose=False)
