@@ -32,6 +32,7 @@ def run_wdd(
     use_multiprocessing,
     no_warmup,
     start_timestamp,
+    stop_timestamp,
     roi,
     verbose=True,
     export_steps=None,
@@ -221,6 +222,7 @@ def run_wdd(
         fullframe_path=fullframe_path if not no_fullframes else "",
         cam_identifier=cam_identifier,
         start_timestamp=start_timestamp,
+        stop_timestamp=stop_timestamp,
         roi=roi,
         **capture_dependent_camera_kwargs
     )

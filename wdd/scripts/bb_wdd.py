@@ -74,6 +74,11 @@ def show_default_option(*args, **kwargs):
     help="Instead of using the wall-clock, generate camera timestamps based on the FPS starting at this iso-formatted timestamp (example: '2019-08-30T12:30:05.000100+00:00')."
 )
 @click.option(
+    "--stop_timestamp",
+    default=None,
+    help="Stop the processing/recording at this camera timestamp (i.e. based on start_timestamp, if given). Must be an iso-formatted timestamp (example: '2019-08-30T12:30:05.000100+00:00')."
+)
+@click.option(
     "--autoopt",
     default="",
     help="Automatically optimize hyperparameters given a CSV file with annotations."

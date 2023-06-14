@@ -25,7 +25,7 @@ from .torch_support import torch
 
 
 class Camera:
-    def __init__(self, height, width, target_height, target_width, fps=None, subsample=0, fullframe_path=None, cam_identifier="cam", start_timestamp=None, roi=None):
+    def __init__(self, height, width, target_height, target_width, fps=None, subsample=0, fullframe_path=None, cam_identifier="cam", start_timestamp=None, stop_timestamp=None, roi=None):
         self.fps = fps
         self.height = height
         self.width = width
@@ -45,7 +45,14 @@ class Camera:
                 self.start_timestamp = datetime.datetime.fromisoformat(start_timestamp).astimezone(pytz.utc)
             except Exception as e:
                 raise ValueError("Invalid 'start_timestamp' argument: {}. Has to be iso-formatted.".format(str(e)))
-        
+            
+        self.stop_timestamp = None
+        if stop_timestamp is not None:
+            try:
+                self.stop_timestamp = datetime.datetime.fromisoformat(stop_timestamp).astimezone(pytz.utc)
+            except Exception as e:
+                raise ValueError("Invalid 'stop_timestamp' argument: {}. Has to be iso-formatted.".format(str(e)))
+            
         self.resize_warning_emitted = False
     def _get_frame(self):
         """
@@ -85,6 +92,11 @@ class Camera:
 
     def get_frame(self):
         ret, frame, full_frame, timestamp = self._get_frame()
+
+        if self.stop_timestamp is not None and timestamp is not None:
+            if timestamp >= self.stop_timestamp:
+                # Abort frame acquisition.
+                ret = False
 
         if not ret:
             return ret, frame, full_frame, timestamp
