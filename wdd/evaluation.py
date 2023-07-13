@@ -215,7 +215,7 @@ def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length, verbose=T
                     duration_error=duration_error
                 ))
 
-            matched_waggles[np.array(waggles.index, dtype=np.int)] = 1
+            matched_waggles[np.array(waggles.index, dtype=int)] = 1
             hits.append(1)
         
         waggles_df["TP"] = matched_waggles
