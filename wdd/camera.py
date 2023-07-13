@@ -308,15 +308,15 @@ class Flea3CapturePySpin(Camera):
         if self.camera is None:
             self.camera = simple_pyspin.Camera(index=int(self.device))
 
-        self.camera.PixelFormat = "MONO8"
+        self.camera.init()
 
-        self.camera.AcquisitionFrameRateAuto = 'Off'
-        self.camera.AcquisitionFrameRateEnabled = True
+        self.camera.PixelFormat = "Mono8"
+
+        self.camera.AcquisitionFrameRateEnable = True
         self.camera.AcquisitionFrameRate = int(fps)
 
-        self.camera.GammaEnabled = False
+        #self.camera.GammaEnabled = False
 
-        self.camera.init()
         self.camera.start()
 
     def _get_frame(self):
