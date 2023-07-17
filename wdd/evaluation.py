@@ -60,6 +60,7 @@ def load_ground_truth(path, start_timestamp=None, fps=None, video_path=""):
             for row in range(annotations.shape[0]):
                 waggle_starts = parse_string_list(annotations.waggle_start_positions.iloc[row])
                 waggle_ends = parse_string_list(annotations.thorax_positions.iloc[row])
+                waggle_directions = parse_string_list(annotations.waggle_directions.iloc[row])
                 start_frames = parse_string_list(annotations.waggle_start_frames.iloc[row])
                 end_frames = parse_string_list(annotations.thorax_frames.iloc[row])
                 if len(waggle_starts) != len(waggle_ends):
@@ -72,7 +73,10 @@ def load_ground_truth(path, start_timestamp=None, fps=None, video_path=""):
                         origin_x=float(waggle_starts[idx][0]),
                         origin_y=float(waggle_starts[idx][1]),
                         end_x=float(waggle_ends[idx][0]),
-                        end_y=float(waggle_ends[idx][1])))
+                        end_y=float(waggle_ends[idx][1]),
+                        orientation_x=float(waggle_directions[idx][0]),
+                        orientation_y=-float(waggle_directions[idx][1])
+                        ))
             if len(all_annotations) == 0:
                 raise ValueError("Empty annotations in {}.".format(path))
             annotations = pandas.DataFrame(all_annotations)
@@ -92,6 +96,14 @@ def load_ground_truth(path, start_timestamp=None, fps=None, video_path=""):
     else:
         raise ValueError("Unknown file format for annotations.")
 
+    if annotations is not None:
+        if "orientation_x" not in annotations.columns:
+            gt_vectors = annotations[["end_x", "end_y"]].values - annotations[["origin_x", "origin_y"]].values
+            gt_vectors[:, 1] *= -1.0
+            gt_vectors /= np.linalg.norm(gt_vectors, axis=1)[:, None]
+            annotations["orientation_x"] = gt_vectors[:, 0]
+            annotations["orientation_y"] = gt_vectors[:, 1]
+        
     return annotations
 
 def parse_waggle_metadata(waggle_metadata):
@@ -157,19 +169,22 @@ def calculate_scores(all_waggle_metadata, ground_truth_df, bee_length, verbose=T
 
         waggles_df["start"] = pandas.to_datetime(waggles_df.start)
         waggles_df["end"] = pandas.to_datetime(waggles_df.end)
-        print(ground_truth_df.end_ts.max(), type(ground_truth_df.end_ts.max()))
-        print(waggles_df.end.max(), type(waggles_df.end.max()))
+
+        if type(ground_truth_df.end_ts.max()) != type(waggles_df.end.max()):
+            print("Error: Timestamps were likely not loaded properly from ground truth file.")
+            print(ground_truth_df.end_ts.max(), type(ground_truth_df.end_ts.max()))
+            print(waggles_df.end.max(), type(waggles_df.end.max()))
         waggles_df = waggles_df[waggles_df.end < ground_truth_df.end_ts.max()]
         matched_waggles = np.zeros(shape=(waggles_df.shape[0],), dtype=bool)
 
-        for x0, y0, x1, y1, dt_begin, dt_end in ground_truth_df[["origin_x", "origin_y",
+        for x0, y0, x1, y1, dt_begin, dt_end, dir_x, dir_y in ground_truth_df[["origin_x", "origin_y",
                                                             "end_x", "end_y",
-                                                            "start_ts", "end_ts"]].itertuples(index=False):
-            gt_vector = np.array([x1, y1]) - np.array([x0, y0])
-            gt_vector[1] *= -1.0
-            gt_angle = np.arctan2(gt_vector[1], gt_vector[0])
-            gt_vector /= np.linalg.norm(gt_vector)
+                                                            "start_ts", "end_ts",
+                                                            "orientation_x", "orientation_y"]
+                                                            ].itertuples(index=False):
             
+            gt_vector = np.array([dir_x, dir_y])
+
             p = bee_length
             x0, x1 = min(x0, x1), max(x0, x1)
             y0, y1 = min(y0, y1), max(y0, y1)
