@@ -20,6 +20,7 @@ class WaggleDecoderConvNet():
                 temporal_dimension=40,
                 expected_bee_length=44.0,
                 default_scale_factor=0.5,
+                n_batches=1,
                 cuda=True):
         """
             Arguments:
@@ -30,6 +31,7 @@ class WaggleDecoderConvNet():
         self.bee_length = bee_length
         self.expected_bee_length = expected_bee_length
         self.temporal_dimension = temporal_dimension
+        self.n_batches = n_batches
         self.device = torch.device("cpu" if not cuda else "cuda")
 
         bee_length_factor = (bee_length / expected_bee_length)
@@ -49,37 +51,54 @@ class WaggleDecoderConvNet():
 
     def predict_on_images(self, images):
         n_images = len(images)
+        
+        batch_size = max(1, min(self.n_batches, n_images // self.temporal_dimension))
 
-        if n_images > 2 * self.temporal_dimension:
-            # If possible, take images starting from the center of the recorded images.
-            # They are a bit more likely to be in the waggle than images directly at the start or end.
-            start_index = n_images // 2
-            end_index = start_index + self.temporal_dimension
-            images = images[start_index:end_index]
+        def get_sequence_from_images(offset_step):
+            begin = n_images // 2 + (offset_step - (batch_size // 2)) * self.temporal_dimension
+            end = begin + self.temporal_dimension
+            if begin < 0 or end > n_images:
+                return None
+            
+            sequence = images[begin:end]
+            sequence = self.normalizer.normalize_images(sequence)
 
-        images = images[-self.temporal_dimension:]
-        images = self.normalizer.normalize_images(images)
+            sequence = [torch.from_numpy(i).to(self.device, non_blocking=True) for i in sequence]
+            sequence = torch.stack(sequence, dim=0)
+            sequence = sequence.unsqueeze(0) # Add channel dimension.
 
-        images = [torch.from_numpy(i).to(self.device, non_blocking=True) for i in images]
-        images = torch.stack(images, dim=0)
+            return sequence
 
-        images = images.unsqueeze(0) # Add channel dimension.
-        images = images.unsqueeze(0) # Add batch dimension.
+        sequences = [get_sequence_from_images(i) for i in range(batch_size)]
+        sequences = [s for s in sequences if s is not None]
+        images = torch.stack(sequences, axis=0)
 
         predictions = self.model(images)
+        assert predictions.shape[0] == len(sequences)
         assert predictions.shape[2] == 1
         assert predictions.shape[3] == 1
         predictions = predictions[:, :, 0, 0, 0]
 
         classes, vectors, durations, confidences = self.model.postprocess_predictions(predictions, return_raw=False, as_numpy=True)
+        assert classes.shape[0] == len(sequences)
+        # Some postprocessing to get the most confident non-other classification.
+        most_certain_sequence = 0
+        specific_predictions = classes != 0
+        if np.any(specific_predictions):
+            conf = confidences.copy()
+            conf[~specific_predictions] /= 2.0
+            most_certain_sequence = np.argmax(conf)
 
-        assert classes.shape[0] == 1 # batch size == 1
+        waggle_detections = classes == 1
+        if np.any(waggle_detections):
+            mean_vectors = np.mean(vectors[waggle_detections], axis=0)
+            vectors[waggle_detections] = mean_vectors[None, :]
 
         return (
-            classes[0],
-            vectors[0],
-            durations[0],
-            confidences[0]
+            classes[most_certain_sequence],
+            vectors[most_certain_sequence],
+            durations[most_certain_sequence],
+            confidences[most_certain_sequence]
         )
         
 

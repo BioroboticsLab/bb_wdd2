@@ -119,6 +119,12 @@ def show_default_option(*args, **kwargs):
     help="Path to the bb_wdd_filter pytorch model checkpoint. If given, the convolutional neural network is used as the decoding stage."
 )
 @click.option(
+    "--filter_model_batches",
+    type=int,
+    default=1,
+    help="Number of subsequences to feed through filter network (more can improve recall, costing precision)."
+)
+@click.option(
     "--no_saving",
     is_flag=True,
     help="Do not serialize detections to the file system."

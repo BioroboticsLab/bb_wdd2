@@ -42,6 +42,7 @@ def run_wdd(
     record_video=None,
     no_fullframes=False,
     filter_model_path=None,
+    filter_model_batches=None,
     no_saving=False,
     save_apngs=False,
     save_waggles_only=False,
@@ -157,7 +158,7 @@ def run_wdd(
     else:
         from wdd.decoding_convnet import WaggleDecoderConvNet
         waggle_decoder = WaggleDecoderConvNet(fps=fps, bee_length=bee_length,
-                model_path=filter_model_path)
+                model_path=filter_model_path, n_batches=filter_model_batches)
         if save_waggles_only or save_only_subset is not None:
             include_classes = ["waggle"] if save_waggles_only else None
 
