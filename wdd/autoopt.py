@@ -43,6 +43,7 @@ def run_optimization(video_device, bee_length, gt_path, start_timestamp, fps, **
         fun_kwargs["start_timestamp"] = start_timestamp.isoformat()
         fun_kwargs["no_warmup"] = True
         fun_kwargs["verbose"] = False
+        fun_kwargs["quiet"] = True
         fun_kwargs["bee_length"] = int(fun_kwargs["bee_length"])
         fun_kwargs["subsample"] = int(fun_kwargs["subsample"])
 
@@ -79,9 +80,9 @@ def run_optimization(video_device, bee_length, gt_path, start_timestamp, fps, **
         return all_results
 
     trials = hyperopt.Trials()
-    best = hyperopt.fmin(objective, search_space, algo=hyperopt.tpe.suggest, max_evals=20, show_progressbar=True, trials=trials)
-
-    print("Optimization finished!")
-    print("Best parameters:")
-    print(hyperopt.space_eval(search_space, best))
-    print(trials.best_trial["result"])
+    for i in range(100):
+        best = hyperopt.fmin(objective, search_space, algo=hyperopt.tpe.suggest, max_evals=(i + 1) * 20, show_progressbar=True, trials=trials)
+        print("Epoch {} finished, current best parameters and score:".format(i + 1))
+        print(hyperopt.space_eval(search_space, best))
+        print(trials.best_trial["result"])
+    

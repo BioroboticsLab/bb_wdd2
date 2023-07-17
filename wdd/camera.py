@@ -25,7 +25,7 @@ from .torch_support import torch
 
 
 class Camera:
-    def __init__(self, height, width, target_height, target_width, fps=None, subsample=0, fullframe_path=None, cam_identifier="cam", start_timestamp=None, stop_timestamp=None, roi=None):
+    def __init__(self, height, width, target_height, target_width, fps=None, subsample=0, fullframe_path=None, cam_identifier="cam", start_timestamp=None, stop_timestamp=None, roi=None, quiet=False):
         self.fps = fps
         self.height = height
         self.width = width
@@ -169,7 +169,7 @@ class Camera:
 
 class OpenCVCapture(Camera):
     def __init__(
-        self, height, width, fps, device, subsample=0, fullframe_path=None, cam_identifier=None, start_timestamp=None, roi=None, fourcc=None, capture_api=None, **kwargs
+        self, height, width, fps, device, subsample=0, fullframe_path=None, cam_identifier=None, start_timestamp=None, roi=None, fourcc=None, capture_api=None, quiet=False, **kwargs
     ):
         super().__init__(height, width, fps=fps, subsample=subsample, fullframe_path=fullframe_path, cam_identifier=cam_identifier, start_timestamp=start_timestamp, roi=roi, **kwargs)
 
@@ -179,8 +179,9 @@ class OpenCVCapture(Camera):
                 preferred_api = getattr(cv2, capture_api)
             except Exception as e:
                 print("video_device_api invalid. Possible values are e.g. CAP_MSMF, CAP_DSHOW, CAP_FFMPEG, CAP_V4L2.")
-                
-        print("Opening OpenCV video device...", end="", flush=True)
+
+        if not quiet: 
+            print("Opening OpenCV video device...", end="", flush=True)
         self.cap = cv2.VideoCapture(device, preferred_api)
         if not self.cap.isOpened():
             try:
@@ -190,8 +191,9 @@ class OpenCVCapture(Camera):
                 pass
             if not self.cap.isOpened():
                 raise RuntimeError("Could not open OpenCV device '{}'!".format(device))
-
-        print(" Done. Setting capture parameters...", end="", flush=True)
+        
+        if not quiet:
+            print(" Done. Setting capture parameters...", end="", flush=True)
 
         if fourcc:
             if len(fourcc) != 4:
@@ -201,7 +203,8 @@ class OpenCVCapture(Camera):
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self.cap.set(cv2.CAP_PROP_FPS, fps)
-        print(" Done.", flush=True)
+        if not quiet:
+            print(" Done.", flush=True)
 
         # Reuse the same allocated memory for a small speedup.
         self.capture_double_buffer = None

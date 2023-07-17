@@ -198,6 +198,7 @@ class WaggleExportPipeline:
         subsampling_factor=None,
         export_steps=None,
         roi=None,
+        quiet=False,
     ):
 
         self.cam_id = cam_id
@@ -210,6 +211,7 @@ class WaggleExportPipeline:
         self.min_images = min_images
         self.subsampling_factor = subsampling_factor
         self.roi = roi
+        self.quiet = quiet
         self.export_steps = export_steps
 
         self.export_queue = queue.Queue(maxsize=100)
@@ -261,7 +263,8 @@ class WaggleExportPipeline:
         frame_idx_offset = frame_idx - waggle.ts[0] + int(self.fps)
         if frame_idx_offset >= self.full_frame_buffer_len:
             frame_idx_offset = self.full_frame_buffer_len - 1
-            print("Warning: Waggle ({}) longer than frame buffer size".format(waggle.timestamp))
+            if not self.quiet:
+                print("Warning: Waggle ({}) longer than frame buffer size".format(waggle.timestamp))
         elif frame_idx_offset < self.min_images:
             frame_idx_offset = self.min_images
 

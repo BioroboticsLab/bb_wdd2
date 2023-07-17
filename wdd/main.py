@@ -35,6 +35,7 @@ def run_wdd(
     stop_timestamp,
     roi,
     verbose=True,
+    quiet=False,
     export_steps=None,
     eval="",
     ipc=None,
@@ -135,6 +136,7 @@ def run_wdd(
         fullframe_path=None,
         cam_identifier=cam_identifier,
         roi=roi,
+        quiet=quiet,
         **capture_dependent_camera_kwargs
     )
     _, _, frame_orig, _ = next(frame_generator)
@@ -191,6 +193,7 @@ def run_wdd(
         fps=fps,
         min_images=int(1.5 * fps),
         roi=roi,
+        quiet=quiet,
         export_steps=export_steps
     )
     wd = WaggleDetector(
@@ -224,6 +227,7 @@ def run_wdd(
         start_timestamp=start_timestamp,
         stop_timestamp=stop_timestamp,
         roi=roi,
+        quiet=quiet,
         **capture_dependent_camera_kwargs
     )
 
@@ -364,7 +368,7 @@ def run_wdd(
                         if record_output:
                             video_writer.write(im)
                         else:
-                            cv2.imshow("WDD", im)
+                            cv2.imshow("WDD", im[::2,::2])
                             cv2.waitKey(1)
 
                 if frame_idx > 0 and (frame_idx % fps == 0):
@@ -395,7 +399,8 @@ def run_wdd(
         if video_writer is not None:
             video_writer.close()
         # Wait for all remaining data to be written.
-        print("\nSaving running exports..", flush=True)
+        if not quiet:
+            print("\nSaving running exports..", flush=True)
         exporter.finalize_exports()
         if waggle_serializer is not None:
             waggle_serializer.finalize_serialization()
