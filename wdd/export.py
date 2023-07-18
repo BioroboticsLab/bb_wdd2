@@ -67,7 +67,7 @@ class ClassFilter:
 
 
 class VideoWriter:
-    def __init__(self, device_name, fps, codec, directory="./", prefix="WDD_Recording_"):
+    def __init__(self, device_name, fps, codec, directory="./", prefix="WDD_Recording_", filetype="auto"):
         self.writer = None
         self.device_name = device_name
         self.codec = codec
@@ -75,6 +75,14 @@ class VideoWriter:
         self.is_color = None
         self.directory = directory
         self.prefix = prefix
+
+        if filetype == "auto":
+            if self.codec.lower() in ("lags", "hfyu"):
+                filetype = "avi"
+            else:
+                filetype = "mp4"
+
+        self.filetype = filetype
 
     def write(self, image):
         if image is None:
@@ -92,7 +100,7 @@ class VideoWriter:
             if "/" in mangled_device_name or "\\" in mangled_device_name:
                 mangled_device_name = mangled_device_name.replace("\\", "/")
                 mangled_device_name = mangled_device_name.split("/")[-1]
-            output_video_name = self.directory + "/" + self.prefix + mangled_device_name + "_" + current_datetime + "+00.mp4"
+            output_video_name = self.directory + "/" + self.prefix + mangled_device_name + "_" + current_datetime + "+00." + self.filetype
             print("Creating output video {}.".format(output_video_name))
             self.writer = cv2.VideoWriter(output_video_name,
                             fourcc,
