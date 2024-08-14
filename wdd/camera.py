@@ -306,7 +306,7 @@ class Flea3CapturePySpin(Camera):
         try:
             # using a 'with' statement initializes it and closes it, and so will fail if it doesn't actually exist
             with simple_pyspin.Camera(index=str(self.device)) as cam:
-                print('camera at',self.device)
+                print("Camera {} found (serial number = {}).".format(self.device, str(cam.__getattr__("DeviceID"))))
             self.camera = simple_pyspin.Camera(index=str(self.device))
         except:
             print("Could not open camera by serial number.. Trying by index.")
