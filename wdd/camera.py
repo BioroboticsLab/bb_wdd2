@@ -134,17 +134,18 @@ class Camera:
 
     def warmup(self, tolerance=0.01, num_frames_per_round=100, num_hits=3):
         fps_target = self.fps - tolerance * self.fps
-
         print("Camera warmup, FPS target >= {:.1f}".format(fps_target))
-
         hits = 0
         while True:
             frame_idx = 0
             start_time = time.time()
 
             for _ in range(num_frames_per_round):
-                ret, _, _, _ = self.get_frame()
-                assert ret
+                ret, frame, full_frame, timestamp = self.get_frame()
+
+                if not ret:
+                    print(f"Warning: Failed to retrieve frame {frame_idx} at timestamp {timestamp}.")
+                    continue  # Skip this frame and retry
 
                 frame_idx += 1
 

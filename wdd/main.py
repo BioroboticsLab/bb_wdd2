@@ -12,7 +12,7 @@ from wdd.camera import OpenCVCapture, Flea3Capture, Flea3CapturePySpin, cam_gene
 from wdd.processing import FrequencyDetector, WaggleDetector
 from wdd.export import WaggleSerializer, WaggleExportPipeline, VideoWriter, ClassFilter
 
-from .torch_support import torch
+from .torch_support import torch, cuda_is_available
 
 def run_wdd(
     capture_type,
@@ -158,7 +158,7 @@ def run_wdd(
     else:
         from wdd.decoding_convnet import WaggleDecoderConvNet
         waggle_decoder = WaggleDecoderConvNet(fps=fps, bee_length=bee_length,
-                model_path=filter_model_path, n_batches=filter_model_batches)
+                model_path=filter_model_path, n_batches=filter_model_batches, cuda=cuda_is_available)
         if save_waggles_only or save_only_subset is not None:
             include_classes = ["waggle"] if save_waggles_only else None
 

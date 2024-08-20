@@ -106,7 +106,7 @@ class WaggleDecoder():
         kernel_size = int(self.bee_length / 8.0)
         filter_output = np.zeros(shape=(diff_images.shape[1], diff_images.shape[2], diff_images.shape[0]), dtype=np.float32)
         for i in range(diff_images.shape[0]):
-            skimage.filters.gaussian(diff_images[i], sigma=kernel_size, output=filter_output[:, :, i])
+            skimage.filters.gaussian(diff_images[i], sigma=kernel_size, out=filter_output[:, :, i])
 
         if self.rescale_factor < 1.0:
             filter_output = skimage.transform.rescale(filter_output,
@@ -336,7 +336,7 @@ class WaggleDecoder():
         for idx in range(waggle_regions.shape[0]):
             img = waggle_regions[idx]
             
-            skimage.filters.gaussian(img, sigma=kernel_size, output=filter_output)
+            skimage.filters.gaussian(img, sigma=kernel_size, out=filter_output)
 
             crop_width = int(kernel_size)
             img = filter_output[crop_width:-crop_width, crop_width:-crop_width]
