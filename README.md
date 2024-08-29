@@ -21,10 +21,13 @@ The software should run at least at 60 FPS (so probably not on a RaspberryPi); t
 Installation
 ------------
 
-The package can be installed from the repository here via pip.
-`pip install git+https://github.com/BioroboticsLab/bb_wdd2.git`
+Run the included installation script to install on Linux and Mac:
+```bash
+bash install_wdd.sh
+```
+  This includes the packages bb_wdd2, [bb_wdd_filter](https://github.com/BioroboticsLab/bb_wdd_filter/), [wdd_bridge](https://github.com/walachey/wdd_bridge/tree/master), and associated dependences for the Spinnaker SDK (FLIR cameras) and CUDA-based GPU support on Linux in order to run in real-time.
 
-The software has been tested on Linux and Windows.
+To just install the package from the repository here, you can do via pip: `pip install git+https://github.com/BioroboticsLab/bb_wdd2.git`. The software has been tested on Linux and Mac, and should also work on Windows. 
 
 Use
 ---

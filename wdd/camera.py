@@ -134,17 +134,18 @@ class Camera:
 
     def warmup(self, tolerance=0.01, num_frames_per_round=100, num_hits=3):
         fps_target = self.fps - tolerance * self.fps
-
         print("Camera warmup, FPS target >= {:.1f}".format(fps_target))
-
         hits = 0
         while True:
             frame_idx = 0
             start_time = time.time()
 
             for _ in range(num_frames_per_round):
-                ret, _, _, _ = self.get_frame()
-                assert ret
+                ret, frame, full_frame, timestamp = self.get_frame()
+
+                if not ret:
+                    print(f"Warning: Failed to retrieve frame {frame_idx} at timestamp {timestamp}.")
+                    continue  # Skip this frame and retry
 
                 frame_idx += 1
 
@@ -304,21 +305,30 @@ class Flea3CapturePySpin(Camera):
         self.device = device
         self.camera = None
         try:
+            # using a 'with' statement initializes it and closes it, and so will fail if it doesn't actually exist
+            with simple_pyspin.Camera(index=str(self.device)) as cam:
+                print("Camera {} found (serial number = {}).".format(self.device, str(cam.__getattr__("DeviceID"))))
             self.camera = simple_pyspin.Camera(index=str(self.device))
         except:
             print("Could not open camera by serial number.. Trying by index.")
+            self.camera = None
 
         if self.camera is None:
+            # open by index if serial number fails
+            try:
+                with simple_pyspin.Camera(index=int(self.device)) as cam:
+                    print('camera',self.device,'found')
+            except:
+                raise RuntimeError(f"Failed to initialize camera at {self.device}")                
             self.camera = simple_pyspin.Camera(index=int(self.device))
 
-        self.camera.init()
-
+        # settings need to go before initialization
+        
         self.camera.PixelFormat = "Mono8"
-
         self.camera.AcquisitionFrameRateEnable = True
         self.camera.AcquisitionFrameRate = int(fps)
-
         #self.camera.GammaEnabled = False
+        self.camera.init()
 
         self.camera.start()
 

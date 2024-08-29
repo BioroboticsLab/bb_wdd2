@@ -46,7 +46,7 @@ class WaggleDecoderConvNet():
             self.model.cuda()
         self.model.eval()
 
-        state = torch.load(model_path)
+        state = torch.load(model_path, map_location=self.device)
         self.model.load_state_dict(state["model"])
 
     def predict_on_images(self, images):

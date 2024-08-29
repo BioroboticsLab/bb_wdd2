@@ -32,7 +32,7 @@ class RTMPStreamer:
         from vidgear.gears import WriteGear
 
         self.stream = WriteGear(
-            output_filename=self.address,
+            output=self.address,
             logging=debug,
             **output_params
         )
