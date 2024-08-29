@@ -102,7 +102,7 @@ conda install jupyter jupyterlab -y
 pip install simple_pyspin vidgear simpleaudio multiprocessing_generator pysound pygobject pre-commit black madgrad imgaug
 
 # Install wdd packages using pip
-pip install git+https://github.com/jacobdavidson/bb_wdd2.git@update
+pip install git+https://github.com/BioroboticsLab/bb_wdd2.git
 pip install git+https://github.com/BioroboticsLab/bb_wdd_filter.git
 pip install git+https://github.com/walachey/wdd_bridge.git
 
