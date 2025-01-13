@@ -32,8 +32,8 @@ if [[ "$OS" == "Linux" ]]; then
     sudo apt install -y qtcreator qtbase5-dev qt5-qmake cmake libasound2-dev build-essential libglib2.0-dev libgirepository1.0-dev libarchive-dev gir1.2-glib-2.0 meson ninja-build
 
     # Install CUDA (Linux only)
-    conda install -c nvidia pytorch torchvision torchaudio pytorch-cuda=12.4 -y
-
+    conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia -y
+    
     # Download and install Spinnaker SDK for Ubuntu
     echo "Downloading and installing Spinnaker SDK..."
     wget -O spinnaker-4.0.0.116-amd64-pkg-22.04.tar.gz https://flir.netx.net/file/asset/59513/original/attachment
