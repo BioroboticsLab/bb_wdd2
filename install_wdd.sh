@@ -30,6 +30,7 @@ if [[ "$OS" == "Linux" ]]; then
     echo "Installing essential tools with 'sudo apt install [package list]'"
     sudo apt update
     sudo apt install -y qtcreator qtbase5-dev qt5-qmake cmake libasound2-dev build-essential libglib2.0-dev libgirepository1.0-dev libarchive-dev gir1.2-glib-2.0 meson ninja-build
+    sudo apt install -y libcairo2-dev pkg-config python3-dev libgirepository1.0-dev gir1.2-gtk-3.0
 
     # Install CUDA (Linux only)
     conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia -y
